@@ -1,0 +1,239 @@
+/* Host-buildable vector test for gopass_core.c. The vectors are copied from
+ * the Go tests (gopass_test.go) so the C generator stays byte-compatible. */
+
+#include "gopass_core.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int failures = 0;
+
+static void
+check_generate(int index, const char *site, const char *login, const char *master,
+               GopassOptions options, const char *want, int want_error)
+{
+    char out[256];
+    char err[256];
+    int result;
+
+    memset(out, 0, sizeof(out));
+    memset(err, 0, sizeof(err));
+    result = gopass_generate(site, login, master, &options, out, sizeof(out), err, sizeof(err));
+
+    if(want_error) {
+        if(result == 0) {
+            printf("FAIL %d: expected error, got password \"%s\"\n", index, out);
+            failures++;
+        } else if(err[0] == '\0') {
+            printf("FAIL %d: error returned but message is empty\n", index);
+            failures++;
+        } else {
+            printf("ok   %d: rejected (%s)\n", index, err);
+        }
+        return;
+    }
+
+    if(result != 0) {
+        printf("FAIL %d: unexpected error: %s\n", index, err);
+        failures++;
+    } else if(strcmp(out, want) != 0) {
+        printf("FAIL %d: got \"%s\", want \"%s\"\n", index, out, want);
+        failures++;
+    } else {
+        printf("ok   %d: \"%s\"\n", index, out);
+    }
+}
+
+static void
+check_derive(int index, const char *password, const char *salt, const char *want_hex)
+{
+    uint8_t out[32];
+    char hex[65];
+    int i;
+
+    gopass_derive_key(password, strlen(password), salt, strlen(salt), out);
+    for(i = 0; i < 32; i++)
+        sprintf(hex + i * 2, "%02x", out[i]);
+    hex[64] = '\0';
+
+    if(strcmp(hex, want_hex) != 0) {
+        printf("FAIL derive %d: got %s, want %s\n", index, hex, want_hex);
+        failures++;
+    } else {
+        printf("ok   derive %d: %s\n", index, hex);
+    }
+}
+
+static void
+check_shape(void)
+{
+    GopassOptions options;
+    char out[256];
+    char err[256];
+    static const char *exclude = "abcXYZ019!@";
+    static const char *lower = "abcdefghijklmnopqrstuvwxyz";
+    static const char *upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    static const char *digits = "0123456789";
+    static const char *symbols = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+    int i, j, has_lower, has_upper, has_digits, has_symbols;
+
+    memset(&options, 0, sizeof(options));
+    options.length = 40;
+    options.counter = 3;
+    options.lowercase = 1;
+    options.uppercase = 1;
+    options.digits = 1;
+    options.symbols = 1;
+    options.exclude = exclude;
+
+    if(gopass_generate("host", "account", "secret", &options, out, sizeof(out), err, sizeof(err)) != 0) {
+        printf("FAIL shape: %s\n", err);
+        failures++;
+        return;
+    }
+    if((int)strlen(out) != 40) {
+        printf("FAIL shape: length %zu, want 40\n", strlen(out));
+        failures++;
+        return;
+    }
+    for(i = 0; exclude[i] != '\0'; i++) {
+        if(strchr(out, exclude[i]) != NULL) {
+            printf("FAIL shape: contains excluded character '%c'\n", exclude[i]);
+            failures++;
+            return;
+        }
+    }
+    has_lower = has_upper = has_digits = has_symbols = 0;
+    for(i = 0; out[i] != '\0'; i++) {
+        if(strchr(lower, out[i]))
+            has_lower = 1;
+        if(strchr(upper, out[i]))
+            has_upper = 1;
+        if(strchr(digits, out[i]))
+            has_digits = 1;
+        for(j = 0; symbols[j] != '\0'; j++) {
+            if(out[i] == symbols[j])
+                has_symbols = 1;
+        }
+    }
+    if(!has_lower || !has_upper || !has_digits || !has_symbols) {
+        printf("FAIL shape: class coverage lower=%d upper=%d digits=%d symbols=%d\n",
+               has_lower, has_upper, has_digits, has_symbols);
+        failures++;
+        return;
+    }
+    printf("ok   shape: 40 chars, all classes covered, exclusions honored\n");
+}
+
+int
+main(void)
+{
+    GopassOptions defaults;
+
+    check_derive(1, "password", "salt",
+        "0394a2ede332c9a13eb82e9b24631604c31df978b4e2f0fbd2c549944f9d79a5");
+    check_derive(2, "", "examplealice1",
+        "caa46554f5a676b76c15b368c655b0b24eaaad8595ef919999785c68e60fd5f5");
+
+    memset(&defaults, 0, sizeof(defaults));
+    defaults.length = 16;
+    defaults.counter = 1;
+    defaults.lowercase = 1;
+    defaults.uppercase = 1;
+    defaults.digits = 1;
+    defaults.symbols = 1;
+    defaults.exclude = "";
+
+    check_generate(1, "example.com", "alice", "correct horse battery staple",
+                   defaults, "&vLf44D'/cSkP-_8", 0);
+
+    {
+        GopassOptions o = defaults;
+
+        o.length = 20;
+        o.counter = 2;
+        check_generate(2, "service.test", "person@example.net", "master",
+                       o, "j:x_Lo5X_jL0w%ez`1be", 0);
+    }
+
+    {
+        GopassOptions o;
+
+        memset(&o, 0, sizeof(o));
+        o.length = 12;
+        o.counter = 7;
+        o.lowercase = 1;
+        o.digits = 1;
+        check_generate(3, "\xce\xb4\xce\xbf\xce\xba\xce\xb9\xce\xbc\xce\xae.example",
+                       "\xe3\x83\xa6\xe3\x83\xbc\xe3\x82\xb6\xe3\x83\xbc",
+                       "p\xc3\xa4ssword", o, "ioh5o2mhyghv", 0);
+    }
+
+    {
+        GopassOptions o = defaults;
+
+        o.length = 24;
+        o.exclude = "0Ool1I!|";
+        check_generate(4, "example.com", "alice", "correct horse battery staple",
+                       o, "7,a.Cp}YnF'ee7HqbX#PQhgH", 0);
+    }
+
+    {
+        GopassOptions o;
+
+        memset(&o, 0, sizeof(o));
+        o.length = 4;
+        o.counter = 0;
+        o.uppercase = 1;
+        o.digits = 1;
+        check_generate(5, "x", "y", "", o, "9O7C", 0);
+    }
+
+    {
+        GopassOptions o;
+
+        memset(&o, 0, sizeof(o));
+        o.length = 0;
+        o.lowercase = 1;
+        check_generate(6, "site", "login", "master", o, "", 1);
+    }
+
+    {
+        GopassOptions o;
+
+        memset(&o, 0, sizeof(o));
+        o.length = 8;
+        check_generate(7, "site", "login", "master", o, "", 1);
+    }
+
+    {
+        GopassOptions o;
+
+        memset(&o, 0, sizeof(o));
+        o.length = 2;
+        o.lowercase = 1;
+        o.uppercase = 1;
+        o.digits = 1;
+        check_generate(8, "site", "login", "master", o, "", 1);
+    }
+
+    {
+        GopassOptions o;
+
+        memset(&o, 0, sizeof(o));
+        o.length = 8;
+        o.digits = 1;
+        o.exclude = "0123456789";
+        check_generate(9, "site", "login", "master", o, "", 1);
+    }
+
+    check_shape();
+
+    if(failures != 0) {
+        printf("%d failure(s)\n", failures);
+        return 1;
+    }
+    printf("all vectors pass\n");
+    return 0;
+}

@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'xyz.waozi.gopass'
+    compileSdk 36
+    ndkVersion "28.2.13676358"
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId 'xyz.waozi.gopass'
+        minSdk 21
+        targetSdk 36
+        versionCode 1
+        versionName "0.1.0"
+        // Default to the two realistic phone targets; override with
+        // -Pabi=x86_64 etc. for emulator builds.
+        def abis = project.findProperty('abi') ?: 'armeabi-v7a,arm64-v8a'
+        ndk {
+            abis.split(',').collect { it.trim() }.each { abiFilters it }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path 'src/main/cpp/CMakeLists.txt'
+        }
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
