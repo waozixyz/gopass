@@ -17,7 +17,7 @@ var appIconPNG []byte
 var emojiFontTTF []byte
 
 type app struct {
-	site, login, master, exclude    *kryui.TextField
+	site, login, master, exclude    *kryui.TextFieldState
 	length, counter                 int32
 	lower, upper, digits, symbols   bool
 	reveal                          bool
@@ -55,14 +55,11 @@ func main() {
 	for !kryui.WindowShouldClose() {
 		a.clipboard.tick()
 		kryui.BeginDrawing()
-		w, h := kryui.GetScreenWidth(), kryui.GetScreenHeight()
-		dpi := kryui.GetWindowScaleDPI().X
-		if dpi <= 0 {
-			dpi = 1
-		}
-		kryui.BeginUIFrame(w, h, dpi)
+		w := kryui.GetScreenWidth()
+		kryui.BeginUI(kryui.Key("gopass/main"))
 		a.draw(w)
-		kryui.EndUIFrame()
+		kryui.EndUI()
+		a.handleUIEvents()
 		kryui.EndDrawing()
 	}
 }
@@ -70,19 +67,19 @@ func main() {
 func (a *app) draw(width int32) {
 	bg, text := kryui.GetThemeBackground(), kryui.GetThemeText()
 	scheme := kryui.GetUIMaterialScheme()
-	kryui.Background(bg)
+	kryui.ClearBackground(bg)
 	contentW := width - 64
 	if contentW > 720 {
 		contentW = 720
 	}
 	x := (width - contentW) / 2
 	kryui.DrawRectangleRounded(kryui.NewRectangle(float32(x), 22, 48, 48), .22, 10, scheme.Primary)
-	kryui.Text("g", x+15, 29, kryui.UIText32, scheme.OnPrimary)
-	kryui.Text("gopass", x+64, 24, kryui.UIText32, text)
-	kryui.Text("Private by design · generated on this device", x+64, 60, kryui.UIText14, scheme.OnSurfaceVariant)
+	kryui.DrawUIText("g", x+15, 29, kryui.UIText32, scheme.OnPrimary)
+	kryui.DrawUIText("gopass", x+64, 24, kryui.UIText32, text)
+	kryui.DrawUIText("Private by design · generated on this device", x+64, 60, kryui.UIText14, scheme.OnSurfaceVariant)
 	kryui.DrawRectangleRounded(kryui.NewRectangle(float32(x), 92, float32(contentW), 550), .035, 10, scheme.Surface)
 	kryui.DrawRectangleLinesEx(kryui.NewRectangle(float32(x), 92, float32(contentW), 550), 1, scheme.Outline)
-	kryui.Text("PASSWORD DETAILS", x+24, 116, kryui.UIText12, scheme.Primary)
+	kryui.DrawUIText("PASSWORD DETAILS", x+24, 116, kryui.UIText12, scheme.Primary)
 
 	style := inputStyle()
 	y := int32(146)
@@ -90,36 +87,26 @@ func (a *app) draw(width int32) {
 	y += 76
 	a.field("Login", a.login, x+24, y, contentW-48, style)
 	y += 76
-	kryui.Text("Master password", x+24, y, kryui.UIText14, text)
+	kryui.DrawUIText("Master password", x+24, y, kryui.UIText14, text)
 	a.master.SetSecure(!a.reveal)
-	changed, _ := a.master.Draw(kryui.NewRectangle(float32(x+24), float32(y+24), float32(contentW-150), 38), kryui.UIText16, style)
-	if changed {
-		master := a.master.Text()
-		if master == "" {
-			a.fingerprint = ""
-		} else {
-			a.fingerprint = password.MasterPasswordEmojiString(master)
-		}
-	}
+	kryui.TextField(a.master, kryui.FieldProps{Bounds: kryui.NewRectangle(float32(x+24), float32(y+24), float32(contentW-150), 38), Font: kryui.UIText16, Style: style})
 	if a.fingerprint != "" {
 		fontToken := kryui.PushUIFont("gopass-emoji")
 		width := kryui.MeasureText(a.fingerprint, kryui.UIText16)
-		kryui.Text(a.fingerprint, x+contentW-24-width, y, kryui.UIText16, scheme.OnSurfaceVariant)
+		kryui.DrawUIText(a.fingerprint, x+contentW-24-width, y, kryui.UIText16, scheme.OnSurfaceVariant)
 		kryui.PopUIFont(fontToken)
 	}
-	if kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+contentW-112), float32(y+24), 88, 38), Label: map[bool]string{true: "Hide", false: "Reveal"}[a.reveal], Style: kryui.UIButtonStyleSecondary, ID: 205}) {
-		a.reveal = !a.reveal
-	}
+	kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+contentW-112), float32(y+24), 88, 38), Label: map[bool]string{true: "Hide", false: "Reveal"}[a.reveal], Style: kryui.UIButtonStyleSecondary, ID: 205})
 	y += 76
 
-	kryui.Text("PASSWORD RULES", x+24, y-10, kryui.UIText12, scheme.Primary)
+	kryui.DrawUIText("PASSWORD RULES", x+24, y-10, kryui.UIText12, scheme.Primary)
 	y += 14
-	kryui.Text("Length", x+24, y, kryui.UIText14, text)
+	kryui.DrawUIText("Length", x+24, y, kryui.UIText14, text)
 	kryui.Spinbox(kryui.SpinboxProps{Bounds: kryui.NewRectangle(float32(x+24), float32(y+24), 130, 38), ID: 301, Min: 1, Max: 128, Step: 1, Value: &a.length})
-	kryui.Text("Counter", x+182, y, kryui.UIText14, text)
+	kryui.DrawUIText("Counter", x+182, y, kryui.UIText14, text)
 	kryui.Spinbox(kryui.SpinboxProps{Bounds: kryui.NewRectangle(float32(x+182), float32(y+24), 130, 38), ID: 302, Min: 1, Max: 999999, Step: 1, Value: &a.counter})
-	a.exclude.Draw(kryui.NewRectangle(float32(x+340), float32(y+24), float32(contentW-364), 38), kryui.UIText16, style)
-	kryui.Text("Excluded characters", x+340, y, kryui.UIText14, text)
+	kryui.TextField(a.exclude, kryui.FieldProps{Bounds: kryui.NewRectangle(float32(x+340), float32(y+24), float32(contentW-364), 38), Font: kryui.UIText16, Style: style})
+	kryui.DrawUIText("Excluded characters", x+340, y, kryui.UIText14, text)
 	y += 76
 
 	kryui.DrawUICheckboxToggle(x+24, y, "Lowercase", &a.lower)
@@ -127,34 +114,56 @@ func (a *app) draw(width int32) {
 	kryui.DrawUICheckboxToggle(x+324, y, "Digits", &a.digits)
 	kryui.DrawUICheckboxToggle(x+444, y, "Symbols", &a.symbols)
 	y += 48
-	if kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+24), float32(y), 150, 42), Label: "Generate", Style: kryui.UIButtonStylePrimary, ID: 401}) {
-		a.generate()
-	}
-	if kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+190), float32(y), 150, 42), Label: "Copy for 20s", Style: kryui.UIButtonStyleSecondary, ID: 402, Disabled: a.generated == ""}) {
-		a.clipboard.copy(a.generated, clipboardLifetime)
-		a.message = "Copied; clipboard clears in 20 seconds"
-	}
-	if kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+356), float32(y), 120, 42), Label: "Clear", Style: kryui.UIButtonStyleSecondary, ID: 403}) {
-		a.master.Clear()
-		a.fingerprint = ""
-		a.generated = ""
-		a.message = "Cleared"
-	}
+	kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+24), float32(y), 150, 42), Label: "Generate", Style: kryui.UIButtonStylePrimary, ID: 401})
+	kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+190), float32(y), 150, 42), Label: "Copy for 20s", Style: kryui.UIButtonStyleSecondary, ID: 402, Disabled: a.generated == ""})
+	kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+356), float32(y), 120, 42), Label: "Clear", Style: kryui.UIButtonStyleSecondary, ID: 403})
 	y += 56
 	kryui.DrawRectangleRounded(kryui.NewRectangle(float32(x+24), float32(y), float32(contentW-48), 72), .08, 10, scheme.SurfaceContainer)
 	if a.generated != "" {
 		kryui.SelectableText(a.generated, x+42, y+15, kryui.UIText20, text)
 	} else {
-		kryui.Text("Your generated password appears here", x+42, y+17, kryui.UIText16, scheme.OnSurfaceVariant)
+		kryui.DrawUIText("Your generated password appears here", x+42, y+17, kryui.UIText16, scheme.OnSurfaceVariant)
 	}
 	if a.message != "" {
-		kryui.Text(a.message, x+42, y+45, kryui.UIText12, scheme.OnSurfaceVariant)
+		kryui.DrawUIText(a.message, x+42, y+45, kryui.UIText12, scheme.OnSurfaceVariant)
 	}
 }
 
-func (a *app) field(label string, field *kryui.TextField, x, y, width int32, style kryui.UITextInputStyle) {
-	kryui.Text(label, x, y, kryui.UIText14, kryui.GetThemeText())
-	field.Draw(kryui.NewRectangle(float32(x), float32(y+24), float32(width), 38), kryui.UIText16, style)
+func (a *app) field(label string, field *kryui.TextFieldState, x, y, width int32, style kryui.UITextInputStyle) {
+	kryui.DrawUIText(label, x, y, kryui.UIText14, kryui.GetThemeText())
+	kryui.TextField(field, kryui.FieldProps{Bounds: kryui.NewRectangle(float32(x), float32(y+24), float32(width), 38), Font: kryui.UIText16, Style: style})
+}
+
+func (a *app) handleUIEvents() {
+	for event, ok := kryui.NextUIEvent(); ok; event, ok = kryui.NextUIEvent() {
+		switch event.Kind {
+		case kryui.EventTextChanged:
+			if event.Key == 103 {
+				if master := a.master.Text(); master != "" {
+					a.fingerprint = password.MasterPasswordEmojiString(master)
+				} else {
+					a.fingerprint = ""
+				}
+			}
+		case kryui.EventClick:
+			switch event.Key {
+			case 205:
+				a.reveal = !a.reveal
+			case 401:
+				a.generate()
+			case 402:
+				if a.generated != "" {
+					a.clipboard.copy(a.generated, clipboardLifetime)
+					a.message = "Copied; clipboard clears in 20 seconds"
+				}
+			case 403:
+				a.master.Clear()
+				a.fingerprint = ""
+				a.generated = ""
+				a.message = "Cleared"
+			}
+		}
+	}
 }
 
 func (a *app) generate() {
