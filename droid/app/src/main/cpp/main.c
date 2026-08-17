@@ -68,7 +68,7 @@ main(int argc, char **argv)
 #if ANDROID_BUILD
     __android_log_write(ANDROID_LOG_INFO, "GOPASS_MAIN", "main start");
     android_bridge_init();
-    if(chdir("/data/user/0/xyz.waozi.gopass/files") != 0)
+    if(chdir("/data/user/0/xyz.waozi.pass/files") != 0)
         TraceLog(LOG_WARNING, "GOPASS: failed to switch to files directory");
 #endif
 

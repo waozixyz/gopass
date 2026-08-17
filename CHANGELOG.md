@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1] - 2026-08-17
+
+- Keep text entry responsive and stable during prolonged use.
+- Render password symbols and emoji correctly without repeatedly rebuilding fonts.
+- Support selecting and replacing text in password and regular text fields.
+- Use `xyz.waozi.pass` consistently as the desktop and Android application ID.
+
 ## [0.1.0] - 2026-08-17
 
 - Generate deterministic, LessPass-compatible passwords from site, login, and

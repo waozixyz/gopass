@@ -1,4 +1,4 @@
-package xyz.waozi.gopass;
+package xyz.waozi.pass;
 
 import android.app.NativeActivity;
 import android.graphics.Insets;

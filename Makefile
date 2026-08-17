@@ -25,11 +25,11 @@ run: gui
 install-gui: gui
 	mkdir -p $(BIN_DIR) $(DATA_DIR)/applications $(DATA_DIR)/icons/hicolor/512x512/apps
 	cp build/gopass-gui $(BIN_DIR)/gopass-gui
-	cp packaging/linux/xyz.waozi.gopass.desktop $(DATA_DIR)/applications/xyz.waozi.gopass.desktop
+	cp packaging/linux/xyz.waozi.pass.desktop $(DATA_DIR)/applications/xyz.waozi.pass.desktop
 	cp assets/app/icon.png $(DATA_DIR)/icons/hicolor/512x512/apps/gopass.png
 
 uninstall-gui:
-	rm -f $(BIN_DIR)/gopass-gui $(DATA_DIR)/applications/xyz.waozi.gopass.desktop $(DATA_DIR)/icons/hicolor/512x512/apps/gopass.png
+	rm -f $(BIN_DIR)/gopass-gui $(DATA_DIR)/applications/xyz.waozi.pass.desktop $(DATA_DIR)/icons/hicolor/512x512/apps/gopass.png
 
 test:
 	go test ./...

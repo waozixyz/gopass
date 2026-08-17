@@ -138,7 +138,7 @@ done:
  * activity's class, so we rely on standard dlsym resolution instead) ---- */
 
 JNIEXPORT void JNICALL
-Java_xyz_waozi_gopass_MainActivity_nativeSetInsets(JNIEnv *env, jobject thiz,
+Java_xyz_waozi_pass_MainActivity_nativeSetInsets(JNIEnv *env, jobject thiz,
                                                    jint status_bar, jint nav_bar,
                                                    jint cutout_left, jint cutout_top,
                                                    jint cutout_right, jint cutout_bottom)
@@ -158,7 +158,7 @@ Java_xyz_waozi_gopass_MainActivity_nativeSetInsets(JNIEnv *env, jobject thiz,
 }
 
 JNIEXPORT void JNICALL
-Java_xyz_waozi_gopass_MainActivity_nativeSetDeviceDensity(JNIEnv *env, jobject thiz, jfloat density)
+Java_xyz_waozi_pass_MainActivity_nativeSetDeviceDensity(JNIEnv *env, jobject thiz, jfloat density)
 {
     (void)env;
     (void)thiz;
@@ -172,7 +172,7 @@ Java_xyz_waozi_gopass_MainActivity_nativeSetDeviceDensity(JNIEnv *env, jobject t
 }
 
 JNIEXPORT void JNICALL
-Java_xyz_waozi_gopass_MainActivity_nativeTextInputCommit(JNIEnv *env, jobject thiz, jint codepoint)
+Java_xyz_waozi_pass_MainActivity_nativeTextInputCommit(JNIEnv *env, jobject thiz, jint codepoint)
 {
     (void)env;
     (void)thiz;
@@ -180,7 +180,7 @@ Java_xyz_waozi_gopass_MainActivity_nativeTextInputCommit(JNIEnv *env, jobject th
 }
 
 JNIEXPORT void JNICALL
-Java_xyz_waozi_gopass_MainActivity_nativeTextInputBackspace(JNIEnv *env, jobject thiz)
+Java_xyz_waozi_pass_MainActivity_nativeTextInputBackspace(JNIEnv *env, jobject thiz)
 {
     (void)env;
     (void)thiz;
@@ -188,7 +188,7 @@ Java_xyz_waozi_gopass_MainActivity_nativeTextInputBackspace(JNIEnv *env, jobject
 }
 
 JNIEXPORT void JNICALL
-Java_xyz_waozi_gopass_MainActivity_nativeTextInputEnter(JNIEnv *env, jobject thiz)
+Java_xyz_waozi_pass_MainActivity_nativeTextInputEnter(JNIEnv *env, jobject thiz)
 {
     (void)env;
     (void)thiz;

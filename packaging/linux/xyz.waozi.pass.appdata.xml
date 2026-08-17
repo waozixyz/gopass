@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>xyz.waozi.gopass</id>
+  <id>xyz.waozi.pass</id>
   <name>gopass</name>
   <summary>Generate deterministic passwords locally</summary>
   <metadata_license>CC0-1.0</metadata_license>
@@ -8,8 +8,8 @@
   <description>
     <p>gopass derives repeatable passwords from a site, login, master password, and generation settings without storing a password database.</p>
   </description>
-  <launchable type="desktop-id">xyz.waozi.gopass.desktop</launchable>
+  <launchable type="desktop-id">xyz.waozi.pass.desktop</launchable>
   <url type="homepage">https://github.com/waozixyz/gopass</url>
   <provides><binary>gopass-gui</binary></provides>
-  <releases><release version="0.1.0" date="2026-08-17"/></releases>
+  <releases><release version="0.1.1" date="2026-08-17"/><release version="0.1.0" date="2026-08-17"/></releases>
 </component>

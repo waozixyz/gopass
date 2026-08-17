@@ -7,7 +7,7 @@
         android:label="@string/app_name"
         android:allowBackup="false">
         <activity
-            android:name="xyz.waozi.gopass.MainActivity"
+            android:name="xyz.waozi.pass.MainActivity"
             android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|uiMode"
             android:exported="true"
             android:launchMode="singleTask"

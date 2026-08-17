@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	password "github.com/waozixyz/gopass"
 )
 
 func TestRunWithArgument(t *testing.T) {
@@ -50,7 +52,7 @@ func TestRunInformationOptions(t *testing.T) {
 		argument string
 		want     string
 	}{
-		{"--version", "gopass 0.1.0"},
+		{"--version", "gopass " + password.Version},
 		{"--help", "Usage: gopass"},
 	} {
 		var output, diagnostics bytes.Buffer
