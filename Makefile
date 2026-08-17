@@ -1,4 +1,7 @@
-.PHONY: all cli gui native run test web site
+.PHONY: all cli gui native run test web site install-gui uninstall-gui
+
+BIN_DIR ?= $(HOME)/bin
+DATA_DIR ?= $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)
 
 KRYON_ARCH ?= $(shell uname -m)
 KRYON_BUILD_DIR := vendor/kryon/build/linux-$(KRYON_ARCH)
@@ -18,6 +21,15 @@ native: all
 
 run: gui
 	./build/gopass-gui
+
+install-gui: gui
+	mkdir -p $(BIN_DIR) $(DATA_DIR)/applications $(DATA_DIR)/icons/hicolor/512x512/apps
+	cp build/gopass-gui $(BIN_DIR)/gopass-gui
+	cp packaging/linux/gopass.desktop $(DATA_DIR)/applications/gopass.desktop
+	cp assets/app/icon.png $(DATA_DIR)/icons/hicolor/512x512/apps/gopass.png
+
+uninstall-gui:
+	rm -f $(BIN_DIR)/gopass-gui $(DATA_DIR)/applications/gopass.desktop $(DATA_DIR)/icons/hicolor/512x512/apps/gopass.png
 
 test:
 	go test ./...

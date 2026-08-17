@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=gopass
+Comment=Generate deterministic passwords locally
+Exec=gopass-gui
+Icon=gopass
+Terminal=false
+Categories=System;Security;
+StartupNotify=true

@@ -1,4 +1,5 @@
 (() => {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/app/sw.js', {scope: '/app/'}).catch(() => {});
   const byId = id => document.getElementById(id);
   const generate = byId('generate'), copy = byId('copy'), result = byId('result'), message = byId('message');
   let copied = '', clearTimer = 0;

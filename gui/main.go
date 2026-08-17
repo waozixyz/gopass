@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"time"
 
 	password "github.com/waozixyz/gopass"
@@ -8,6 +9,9 @@ import (
 )
 
 const clipboardLifetime = 20 * time.Second
+
+//go:embed icon.png
+var appIconPNG []byte
 
 type app struct {
 	site, login, master, exclude  *kryui.TextField
@@ -31,6 +35,9 @@ func main() {
 	kryui.SetConfigFlags(kryui.FlagWindowResizable)
 	kryui.InitWindow(720, 690, "gopass")
 	defer kryui.CloseWindow()
+	icon := kryui.LoadImageFromMemory(".png", appIconPNG)
+	kryui.SetWindowIcon(icon)
+	kryui.UnloadImage(icon)
 	kryui.SetThemeStyle(kryui.ThemeStyleMaterial)
 	kryui.SetCurrentTheme(11, true) // Cobalt dark
 	kryui.SetWindowMinSize(560, 620)
@@ -48,6 +55,7 @@ func main() {
 		}
 		kryui.BeginUIFrame(w, h, dpi)
 		a.draw(w)
+		kryui.EndUIFrame()
 		kryui.EndDrawing()
 	}
 }
