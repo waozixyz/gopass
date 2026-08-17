@@ -33,6 +33,18 @@ func TestRunUsesEnvironmentAndFlags(t *testing.T) {
 	}
 }
 
+func TestRunAcceptsFlagsAfterSiteAndLogin(t *testing.T) {
+	t.Setenv(environmentVariable, "correct horse battery staple")
+	var output, diagnostics bytes.Buffer
+	err := run([]string{"example.com", "alice", "-C", "9", "-L", "23", "--no-symbols"}, &output, &diagnostics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(output.String()); len(got) != 23 {
+		t.Fatalf("output length = %d, want 23", len(got))
+	}
+}
+
 func TestRunInformationOptions(t *testing.T) {
 	for _, test := range []struct {
 		argument string

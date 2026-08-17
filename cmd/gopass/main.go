@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	password "github.com/waozixyz/gopass"
 )
@@ -52,7 +53,7 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 	flags.BoolVar(&showVersion, "v", false, "show version")
 	flags.BoolVar(&showVersion, "version", false, "show version")
 
-	if err := flags.Parse(arguments); err != nil {
+	if err := flags.Parse(normalizeArguments(arguments)); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
@@ -101,6 +102,37 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 	}
 	fmt.Fprintln(stdout, generated)
 	return nil
+}
+
+// normalizeArguments lets callers place options before or after SITE and
+// LOGIN. The standard flag package stops at the first positional argument,
+// while command wrappers naturally append profile options after the site.
+func normalizeArguments(arguments []string) []string {
+	valueFlags := map[string]bool{
+		"-L": true, "--length": true,
+		"-C": true, "--counter": true,
+		"--exclude": true,
+	}
+	options := make([]string, 0, len(arguments))
+	positional := make([]string, 0, 3)
+
+	for i := 0; i < len(arguments); i++ {
+		argument := arguments[i]
+		if argument == "--" {
+			positional = append(positional, arguments[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(argument, "-") && argument != "-" {
+			options = append(options, argument)
+			if valueFlags[argument] && i+1 < len(arguments) {
+				i++
+				options = append(options, arguments[i])
+			}
+			continue
+		}
+		positional = append(positional, argument)
+	}
+	return append(options, positional...)
 }
 
 func masterPassword(positional []string, forcePrompt bool) (string, error) {

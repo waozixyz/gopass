@@ -9,7 +9,7 @@ KRYON_BUILD_DIR := vendor/kryon/build/linux-$(KRYON_ARCH)
 all: cli gui
 
 cli:
-	go build -o build/gopass ./cmd/gopass
+	go build -o gopass ./cmd/gopass
 
 $(KRYON_BUILD_DIR)/libkryon.a:
 	$(MAKE) -C vendor/kryon -f Makefile all
