@@ -7,7 +7,6 @@ goroot=$(go env GOROOT)
 
 rm -rf "$out_dir"
 mkdir -p "$out_dir/app"
-mkdir -p "$out_dir/fonts"
 cp "$root_dir/web/site/index.html" "$out_dir/index.html"
 cp "$root_dir/web/site/styles.css" "$out_dir/styles.css"
 cp "$root_dir/web/site/app/index.html" "$out_dir/app/index.html"
@@ -18,7 +17,6 @@ cp "$root_dir/web/site/sitemap.xml" "$out_dir/sitemap.xml"
 cp "$root_dir/web/site/_redirects" "$out_dir/_redirects"
 cp "$root_dir/web/site/manifest.webmanifest" "$out_dir/manifest.webmanifest"
 cp -R "$root_dir/web/site/icons" "$out_dir/icons"
-cp "$root_dir/web/site/fonts/DepartureMono-Regular.otf" "$out_dir/fonts/DepartureMono-Regular.otf"
 cp -R "$root_dir/web/site/app/icons" "$out_dir/app/icons"
 cp "$root_dir/web/site/app/sw.js" "$out_dir/app/sw.js"
 cp "$goroot/lib/wasm/wasm_exec.js" "$out_dir/app/wasm_exec.js" 2>/dev/null || \
