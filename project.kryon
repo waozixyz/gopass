@@ -1,0 +1,7 @@
+name "gopass"
+generated "build/kryon/generated"
+default_target "Run"
+
+target "Run" "run" "make run"
+target "CLI" "cli" "make cli"
+target "Native" "native" "make native"

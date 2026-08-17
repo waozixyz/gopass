@@ -1,0 +1,60 @@
+name: Site
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+          cache: false
+      - run: make site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gopass-site
+          path: build/site
+          if-no-files-found: error
+
+  deploy-preview:
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gopass-site
+          path: build/site
+      - run: npm install --global netlify-cli
+      - run: netlify deploy --dir build/site --no-build --alias "pr-${{ github.event.pull_request.number }}" --auth "$NETLIFY_AUTH_TOKEN" --site "$NETLIFY_SITE_ID"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+  deploy-production:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gopass-site
+          path: build/site
+      - run: npm install --global netlify-cli
+      - run: netlify deploy --dir build/site --no-build --prod --auth "$NETLIFY_AUTH_TOKEN" --site "$NETLIFY_SITE_ID"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

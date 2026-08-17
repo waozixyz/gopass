@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cli:
+    name: CLI (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux, darwin, windows, freebsd]
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+          cache: false
+      - name: Build archive
+        env:
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          name="gopass-cli-${TARGET_OS}-${TARGET_ARCH}"
+          mkdir -p "build/release/$name"
+          suffix=""
+          [ "$TARGET_OS" = windows ] && suffix=".exe"
+          CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" go build -trimpath -ldflags='-s -w' -o "build/release/$name/gopass$suffix" ./cmd/gopass
+          cp LICENSE README.md "build/release/$name/"
+          if [ "$TARGET_OS" = windows ]; then
+            (cd build/release && zip -qr "$name.zip" "$name")
+          else
+            tar -C build/release -czf "build/release/$name.tar.gz" "$name"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.os }}-${{ matrix.arch }}
+          path: build/release/gopass-cli-${{ matrix.os }}-${{ matrix.arch }}.*
+          if-no-files-found: error
+
+  gui:
+    name: GUI (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.x
+          cache: false
+      - name: Install native dependencies
+        run: |
+          mapfile -t packages < .github/apt/gui-packages.txt
+          sudo apt-get update
+          sudo apt-get install -y "${packages[@]}"
+      - run: make gui
+      - name: Package GUI
+        run: |
+          name="gopass-gui-linux-${{ matrix.arch }}"
+          mkdir -p "build/release/$name"
+          cp build/gopass-gui LICENSE README.md "build/release/$name/"
+          tar -C build/release -czf "build/release/$name.tar.gz" "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gui-linux-${{ matrix.arch }}
+          path: build/release/gopass-gui-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+          cache: false
+      - run: make site
+      - run: cd build/site && zip -qr ../gopass-web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: build/gopass-web.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [cli, gui, web]
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.version.outputs.released }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: build/artifacts
+          merge-multiple: true
+      - id: version
+        name: Resolve release version
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^const Version = "\([^"]*\)"/\1/p' version.go)
+          test -n "$version"
+          tag="v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create release tag
+        if: steps.version.outputs.released == 'true'
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+      - name: Publish GitHub release
+        if: steps.version.outputs.released == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: build/artifacts/*
