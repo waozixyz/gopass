@@ -1,4 +1,4 @@
-name: Site
+name: Netlify
 
 on:
   push:
@@ -8,11 +8,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: site-${{ github.ref }}
+  group: netlify-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,28 +22,80 @@ jobs:
         with:
           go-version: 1.24.x
           cache: false
-      - run: make site
+      - name: Build Site
+        run: |
+          set -euo pipefail
+          make site
+          test -s build/site/index.html
+          test -s build/site/app/index.html
+          test -s build/site/app/gopass.wasm
       - uses: actions/upload-artifact@v4
         with:
           name: gopass-site
           path: build/site
           if-no-files-found: error
 
-  deploy-production:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+  deploy-preview:
+    name: Deploy Preview
+    if: github.event_name == 'pull_request'
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: gopass-site
           path: build/site
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - name: Install Netlify CLI
+        run: npm install --global netlify-cli
+      - name: Deploy Preview To Netlify
+        run: |
+          set -euo pipefail
+          auth_token="$(printf '%s' "$NETLIFY_AUTH_TOKEN" | tr -d '\r\n')"
+          site_id="$(printf '%s' "$NETLIFY_SITE_ID" | tr -d '\r\n')"
+          netlify deploy \
+            --dir build/site \
+            --no-build \
+            --alias "pr-${{ github.event.pull_request.number }}" \
+            --message "Preview ${{ github.event.pull_request.number }}" \
+            --auth "$auth_token" \
+            --site "$site_id"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+  deploy-production:
+    name: Deploy Production
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
+          name: gopass-site
           path: build/site
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Package Site
+        run: |
+          set -euo pipefail
+          test -s build/site/index.html
+          cd build/site
+          zip -qr ../gopass-site.zip .
+          test -s ../gopass-site.zip
+      - name: Deploy Production To Netlify
+        run: |
+          set -euo pipefail
+          auth_token="$(printf '%s' "$NETLIFY_AUTH_TOKEN" | tr -d '\r\n')"
+          site_id="$(printf '%s' "$NETLIFY_SITE_ID" | tr -d '\r\n')"
+          test -n "$auth_token" || { echo "::error::NETLIFY_AUTH_TOKEN is empty or missing"; exit 1; }
+          test -n "$site_id" || { echo "::error::NETLIFY_SITE_ID is empty or missing"; exit 1; }
+
+          response="$(curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $auth_token" \
+            -H "Content-Type: application/zip" \
+            --data-binary "@build/gopass-site.zip" \
+            "https://api.netlify.com/api/v1/sites/$site_id/deploys")"
+
+          python3 -c 'import json, sys; deploy = json.loads(sys.argv[1]); state = deploy.get("state", ""); url = deploy.get("ssl_url") or deploy.get("url") or deploy.get("deploy_ssl_url") or deploy.get("deploy_url") or deploy.get("id"); print(f"Netlify deploy {state}: {url}"); raise SystemExit(1 if state in ("error", "failed") else 0)' "$response"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
