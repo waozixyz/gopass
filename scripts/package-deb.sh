@@ -1,0 +1,35 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+version=$(sed -n 's/^const Version = "\([^"]*\)"/\1/p' "$root/version.go")
+arch=${DEB_ARCH:-$(dpkg --print-architecture)}
+stage="$root/build/package/deb/gopass"
+out="$root/build/release"
+
+test -n "$version"
+rm -rf "$stage"
+mkdir -p "$stage/DEBIAN" "$stage/usr/bin" "$stage/usr/share/applications" "$stage/usr/share/metainfo" "$stage/usr/share/icons/hicolor/512x512/apps" "$stage/usr/share/doc/gopass" "$out"
+cp "$root/build/gopass-gui" "$stage/usr/bin/gopass-gui"
+cp "$root/packaging/linux/xyz.waozi.gopass.desktop" "$stage/usr/share/applications/xyz.waozi.gopass.desktop"
+cp "$root/packaging/linux/xyz.waozi.gopass.appdata.xml" "$stage/usr/share/metainfo/xyz.waozi.gopass.appdata.xml"
+cp "$root/assets/app/icon.png" "$stage/usr/share/icons/hicolor/512x512/apps/gopass.png"
+cp "$root/LICENSE" "$root/README.md" "$stage/usr/share/doc/gopass/"
+find "$stage" -type d -exec chmod 0755 {} \;
+chmod 0755 "$stage/usr/bin/gopass-gui"
+find "$stage/usr/share" -type f -exec chmod 0644 {} \;
+installed=$(du -sk "$stage" | awk '{print $1}')
+cat > "$stage/DEBIAN/control" <<EOF
+Package: gopass
+Version: $version
+Architecture: $arch
+Maintainer: Waozi <waozi@proton.me>
+Installed-Size: $installed
+Depends: libc6, libsdl2-2.0-0, libgl1, libgtk-3-0
+Section: utils
+Priority: optional
+Homepage: https://pass.waozi.xyz/
+Description: deterministic local password generator
+ Generate repeatable passwords locally without a password database.
+EOF
+dpkg-deb --root-owner-group --build "$stage" "$out/gopass_${version}_${arch}.deb"

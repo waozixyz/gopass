@@ -8,4 +8,6 @@ if [ -z "$release_version" ]; then
 fi
 
 sed -E -i "s/^const Version = \"[^\"]+\"$/const Version = \"$release_version\"/" version.go
+sed -E -i "s/(<release version=\")[^\"]+(\")/\1$release_version\2/" packaging/linux/xyz.waozi.gopass.appdata.xml
 grep -F "const Version = \"$release_version\"" version.go >/dev/null
+grep -F "<release version=\"$release_version\"" packaging/linux/xyz.waozi.gopass.appdata.xml >/dev/null

@@ -64,6 +64,8 @@ jobs:
         run: make gui
       - name: Test GUI logic
         run: cd gui && go test ./...
+      - name: Build Debian package
+        run: make package-deb
       - uses: actions/upload-artifact@v4
         with:
           name: gopass-gui-linux-${{ matrix.arch }}

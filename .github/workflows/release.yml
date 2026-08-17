@@ -73,16 +73,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y "${packages[@]}"
       - run: make gui
-      - name: Package GUI
+      - name: Package GUI tarball and Debian package
         run: |
           name="gopass-gui-linux-${{ matrix.arch }}"
           mkdir -p "build/release/$name"
           cp build/gopass-gui LICENSE README.md "build/release/$name/"
           tar -C build/release -czf "build/release/$name.tar.gz" "$name"
+          make package-deb
+      - name: Package AppImage
+        run: |
+          case "${{ matrix.arch }}" in
+            amd64) ld_arch=x86_64 ;;
+            arm64) ld_arch=aarch64 ;;
+          esac
+          curl -fL "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${ld_arch}.AppImage" -o build/linuxdeploy.AppImage
+          chmod +x build/linuxdeploy.AppImage
+          (cd build && ./linuxdeploy.AppImage --appimage-extract >/dev/null)
+          make package-appimage LINUXDEPLOY="$PWD/build/squashfs-root/AppRun" APPIMAGE_ARCH="$ld_arch"
       - uses: actions/upload-artifact@v4
         with:
           name: gui-linux-${{ matrix.arch }}
-          path: build/release/gopass-gui-linux-${{ matrix.arch }}.tar.gz
+          path: |
+            build/release/gopass-gui-linux-${{ matrix.arch }}.tar.gz
+            build/release/*.deb
+            build/release/*.AppImage
           if-no-files-found: error
 
   web:
