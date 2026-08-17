@@ -95,8 +95,10 @@ func (a *app) draw(width int32) {
 		// Same master password, same emoji — visible confirmation the right
 		// master was typed, without storing or ever showing it.
 		fingerprint := password.MasterPasswordEmojiString(master)
+		fontToken := kryui.PushUIFont("gopass-emoji")
 		width := kryui.MeasureText(fingerprint, kryui.UIText16)
 		kryui.Text(fingerprint, x+contentW-24-width, y, kryui.UIText16, scheme.OnSurfaceVariant)
+		kryui.PopUIFont(fontToken)
 	}
 	a.master.SetSecure(!a.reveal)
 	a.master.Draw(kryui.NewRectangle(float32(x+24), float32(y+24), float32(contentW-150), 38), kryui.UIText16, style)
