@@ -17,12 +17,12 @@ var appIconPNG []byte
 var emojiFontTTF []byte
 
 type app struct {
-	site, login, master, exclude  *kryui.TextField
-	length, counter               int32
-	lower, upper, digits, symbols bool
-	reveal                        bool
-	generated, message            string
-	clipboard                     clipboardLease
+	site, login, master, exclude    *kryui.TextField
+	length, counter                 int32
+	lower, upper, digits, symbols   bool
+	reveal                          bool
+	generated, message, fingerprint string
+	clipboard                       clipboardLease
 }
 
 func newApp() *app {
@@ -48,7 +48,7 @@ func main() {
 	// codepoints; all other glyphs keep coming from the theme font.
 	kryui.RegisterUIFixedFontData("gopass-emoji", ".ttf", emojiFontTTF, password.MasterEmojiCodepoints())
 	kryui.SetWindowMinSize(560, 620)
-	kryui.SetTargetFPS(60)
+	kryui.EnableEventWaiting()
 
 	a := newApp()
 	defer func() { a.master.Clear(); a.clipboard.clear() }()
@@ -91,17 +91,22 @@ func (a *app) draw(width int32) {
 	a.field("Login", a.login, x+24, y, contentW-48, style)
 	y += 76
 	kryui.Text("Master password", x+24, y, kryui.UIText14, text)
-	if master := a.master.Text(); master != "" {
-		// Same master password, same emoji — visible confirmation the right
-		// master was typed, without storing or ever showing it.
-		fingerprint := password.MasterPasswordEmojiString(master)
+	a.master.SetSecure(!a.reveal)
+	changed, _ := a.master.Draw(kryui.NewRectangle(float32(x+24), float32(y+24), float32(contentW-150), 38), kryui.UIText16, style)
+	if changed {
+		master := a.master.Text()
+		if master == "" {
+			a.fingerprint = ""
+		} else {
+			a.fingerprint = password.MasterPasswordEmojiString(master)
+		}
+	}
+	if a.fingerprint != "" {
 		fontToken := kryui.PushUIFont("gopass-emoji")
-		width := kryui.MeasureText(fingerprint, kryui.UIText16)
-		kryui.Text(fingerprint, x+contentW-24-width, y, kryui.UIText16, scheme.OnSurfaceVariant)
+		width := kryui.MeasureText(a.fingerprint, kryui.UIText16)
+		kryui.Text(a.fingerprint, x+contentW-24-width, y, kryui.UIText16, scheme.OnSurfaceVariant)
 		kryui.PopUIFont(fontToken)
 	}
-	a.master.SetSecure(!a.reveal)
-	a.master.Draw(kryui.NewRectangle(float32(x+24), float32(y+24), float32(contentW-150), 38), kryui.UIText16, style)
 	if kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+contentW-112), float32(y+24), 88, 38), Label: map[bool]string{true: "Hide", false: "Reveal"}[a.reveal], Style: kryui.UIButtonStyleSecondary, ID: 205}) {
 		a.reveal = !a.reveal
 	}
@@ -131,6 +136,7 @@ func (a *app) draw(width int32) {
 	}
 	if kryui.Button(kryui.ButtonProps{Bounds: kryui.NewRectangle(float32(x+356), float32(y), 120, 42), Label: "Clear", Style: kryui.UIButtonStyleSecondary, ID: 403}) {
 		a.master.Clear()
+		a.fingerprint = ""
 		a.generated = ""
 		a.message = "Cleared"
 	}
