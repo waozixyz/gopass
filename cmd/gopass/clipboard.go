@@ -3,9 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 type clipboardCommand struct {
@@ -13,7 +15,15 @@ type clipboardCommand struct {
 	args    []string
 }
 
-func copyToClipboard(value string) error {
+func copyToClipboard(value string, clearAfter time.Duration) error {
+	// The built-in pure-Go X11 clipboard doubles as the only backend that can
+	// auto-clear: it owns the selection from a daemon and releases it on time.
+	if handled, err := copyViaX11(value, clearAfter); handled {
+		return err
+	}
+	if clearAfter > 0 {
+		fmt.Fprintln(os.Stderr, "warning: --clear-after needs the built-in X11 clipboard; copying without auto-clear")
+	}
 	commands := clipboardCommands()
 	var failures []error
 	for _, candidate := range commands {
