@@ -14,7 +14,7 @@ func TestDecryptAgainstOpenSSL(t *testing.T) {
 		t.Skip("openssl not available")
 	}
 	dir := t.TempDir()
-	file := filepath.Join(dir, ".secret_vault")
+	file := filepath.Join(dir, ".vault")
 
 	encrypt := `printf 'my-top-secret' | openssl enc -aes-256-cbc -md sha512 -a -pbkdf2 -iter 100000 -salt -pass pass:masterpw > ` + file
 	if out, err := exec.Command("sh", "-c", encrypt).CombinedOutput(); err != nil {

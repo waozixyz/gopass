@@ -114,7 +114,7 @@ func TestVaultMasterPasswordBeatsEnvironmentAndPositional(t *testing.T) {
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not available")
 	}
-	vaultFile := filepath.Join(t.TempDir(), ".secret_vault")
+	vaultFile := filepath.Join(t.TempDir(), ".vault")
 	encrypt := `printf 'my-top-secret' | openssl enc -aes-256-cbc -md sha512 -a -pbkdf2 -iter 100000 -salt -pass pass:masterpw > ` + vaultFile
 	if out, err := exec.Command("sh", "-c", encrypt).CombinedOutput(); err != nil {
 		t.Fatalf("openssl encrypt failed: %v: %s", err, out)
@@ -150,7 +150,7 @@ func TestConfigVaultIsUsedForProfile(t *testing.T) {
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not available")
 	}
-	vaultFile := filepath.Join(t.TempDir(), ".secret_vault")
+	vaultFile := filepath.Join(t.TempDir(), ".vault")
 	encrypt := `printf 'cfg-secret' | openssl enc -aes-256-cbc -md sha512 -a -pbkdf2 -iter 100000 -salt -pass pass:masterpw > ` + vaultFile
 	if out, err := exec.Command("sh", "-c", encrypt).CombinedOutput(); err != nil {
 		t.Fatalf("openssl encrypt failed: %v: %s", err, out)
@@ -179,7 +179,7 @@ func TestExpandHome(t *testing.T) {
 	}
 	for _, test := range []struct{ in, want string }{
 		{"~", home},
-		{"~/bin/.secret_vault", filepath.Join(home, "bin", ".secret_vault")},
+		{"~/bin/.vault", filepath.Join(home, "bin", ".vault")},
 		{"/abs/path", "/abs/path"},
 		{"relative", "relative"},
 	} {
@@ -193,7 +193,7 @@ func TestVaultPassphraseFromPipedStdin(t *testing.T) {
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not available")
 	}
-	vaultFile := filepath.Join(t.TempDir(), ".secret_vault")
+	vaultFile := filepath.Join(t.TempDir(), ".vault")
 	encrypt := `printf 'piped-secret' | openssl enc -aes-256-cbc -md sha512 -a -pbkdf2 -iter 100000 -salt -pass pass:masterpw > ` + vaultFile
 	if out, err := exec.Command("sh", "-c", encrypt).CombinedOutput(); err != nil {
 		t.Fatalf("openssl encrypt failed: %v: %s", err, out)

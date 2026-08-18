@@ -2,11 +2,23 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	password "github.com/waozixyz/gopass"
 )
+
+// TestMain isolates every test in this package from the developer's real
+// profiles file: without this, a machine with ~/.config/gopass/profiles.json
+// would feed private configuration into the tests.
+func TestMain(m *testing.M) {
+	configPath = func() string {
+		return filepath.Join(os.TempDir(), "gopass-tests-absent-profiles.json")
+	}
+	os.Exit(m.Run())
+}
 
 func TestRunWithArgument(t *testing.T) {
 	var output, diagnostics bytes.Buffer

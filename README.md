@@ -67,7 +67,7 @@ gopass --profile work example.com
 
 ```json
 {
-  "vault": "~/.secret_vault",
+  "vault": "~/.vault",
   "copy": true,
   "clear_after": "90s",
   "profiles": {
@@ -85,8 +85,8 @@ and without a configuration file gopass behaves exactly as before.
 
 ```sh
 printf 'master password' | openssl enc -aes-256-cbc -md sha512 -a \
-    -pbkdf2 -iter 100000 -salt -pass pass:... > ~/.secret_vault
-gopass --vault ~/.secret_vault example.com alice
+    -pbkdf2 -iter 100000 -salt -pass pass:... > ~/.vault
+gopass --vault ~/.vault example.com alice
 ```
 
 The vault passphrase is requested on the terminal with echo disabled, or read
