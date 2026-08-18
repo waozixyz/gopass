@@ -1,0 +1,59 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  privacy:
+    name: Privacy scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Prove the scanner works using only a synthetic term — the guard
+      # itself must never contain, or reveal, real private values.
+      - name: Self-test the scanner with a synthetic canary
+        run: |
+          canary=zzq-canary-7f3a
+          printf '%s\n' "$canary" > /tmp/canary-terms
+          mkdir /tmp/canary-dir
+          printf 'const token = "%s";\n' "$canary" > /tmp/canary-dir/leak.js
+          if scripts/privacy_scan.sh /tmp/canary-terms /tmp/canary-dir; then
+            echo "scanner failed to detect the canary" >&2
+            exit 1
+          fi
+          if scripts/privacy_scan.sh /tmp/canary-terms scripts; then
+            echo "scanner reported a false positive on its own source" >&2
+            exit 1
+          fi
+          rm -rf /tmp/canary-dir /tmp/canary-terms
+
+      # The deny-list comes from the encrypted PRIVATE_TERMS repository
+      # secret (one fixed-string term per line) so the private values are
+      # never part of this repository. Fork pull requests cannot read
+      # secrets; those runs skip with a warning and the scan re-runs on
+      # the push that lands the merge.
+      - name: Scan the repository for private terms
+        env:
+          PRIVATE_TERMS: ${{ secrets.PRIVATE_TERMS }}
+        run: |
+          if [ -z "$PRIVATE_TERMS" ]; then
+            echo "::warning::PRIVATE_TERMS secret is not set; privacy scan skipped"
+            exit 0
+          fi
+          printf '%s\n' "$PRIVATE_TERMS" > /tmp/terms
+          chmod 600 /tmp/terms
+          status=0
+          scripts/privacy_scan.sh /tmp/terms HEAD || status=1
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            before="${{ github.event.before }}"
+            if [ "$before" != "0000000000000000000000000000000000000000" ]; then
+              for commit in $(git rev-list "$before..$GITHUB_SHA"); do
+                scripts/privacy_scan.sh /tmp/terms "$commit" || status=1
+              done
+            fi
+          fi
+          exit $status
