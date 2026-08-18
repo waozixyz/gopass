@@ -11,5 +11,5 @@
   <launchable type="desktop-id">xyz.waozi.pass.desktop</launchable>
   <url type="homepage">https://github.com/waozixyz/gopass</url>
   <provides><binary>gopass-gui</binary></provides>
-  <releases><release version="0.1.1" date="2026-08-17"/><release version="0.1.0" date="2026-08-17"/></releases>
+  <releases><release version="0.1.2" date="2026-08-17"/><release version="0.1.1" date="2026-08-17"/><release version="0.1.0" date="2026-08-17"/></releases>
 </component>

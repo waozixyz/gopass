@@ -1,4 +1,4 @@
 package gopass
 
 // Version is the current application version.
-const Version = "0.1.1"
+const Version = "0.1.2"

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2] - 2026-08-17
+
+- Make keyboard navigation reliable: click a field, then use Tab and Shift+Tab
+  to move through the form.
+- Keep one gopass window open by default; launching it again replaces the
+  existing window.
+- Keep long editing sessions responsive and stable.
+
 ## [0.1.1] - 2026-08-17
 
 - Keep text entry responsive and stable during prolonged use.
