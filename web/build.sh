@@ -9,6 +9,7 @@ rm -rf "$out_dir"
 mkdir -p "$out_dir/app"
 cp "$root_dir/web/site/index.html" "$out_dir/index.html"
 cp "$root_dir/web/site/styles.css" "$out_dir/styles.css"
+cp "$root_dir/web/site/home.js" "$out_dir/home.js"
 cp "$root_dir/web/site/app/index.html" "$out_dir/app/index.html"
 cp "$root_dir/web/site/app/app.js" "$out_dir/app/app.js"
 cp "$root_dir/web/site/CNAME" "$out_dir/CNAME"
@@ -24,4 +25,5 @@ cp "$goroot/lib/wasm/wasm_exec.js" "$out_dir/app/wasm_exec.js" 2>/dev/null || \
 (cd "$root_dir/web/wasm" && GOOS=js GOARCH=wasm go build -o "$out_dir/app/gopass.wasm" .)
 
 test -s "$out_dir/app/gopass.wasm"
+test -s "$out_dir/home.js"
 printf 'built site at %s\n' "$out_dir"

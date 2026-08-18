@@ -17,7 +17,14 @@
   <main>
     <section class="hero">
       <div><p class="eyebrow">Stateless · local · open source</p><img class="hero-icon" src="/icons/icon-192.png" alt="gopass"><h1>One master password.<br><span>Every site covered.</span></h1><p class="lede">gopass derives strong, repeatable passwords on your device. Nothing is stored, uploaded, or tracked.</p><div class="actions"><a class="button primary" href="/app/">Run Web</a><a class="button" href="#downloads">Download apps</a></div></div>
-      <div class="preview"><div class="preview-head"><i></i><i></i><i></i><span>generated locally</span></div><div class="preview-body"><label>Site</label><div class="fake-input">example.org</div><label>Generated password</label><div class="password">••••••••••••••••</div><div class="privacy-line">No network requests. No password database.</div></div></div>
+      <div class="preview" id="generator"><div class="preview-head"><i></i><i></i><i></i><span>generated locally</span></div><div class="preview-body"><div class="form-grid">
+        <label>Site<input id="site" autocomplete="off" placeholder="example.org"></label><label>Login<input id="login" autocomplete="username" placeholder="you@example.org"></label>
+        <label class="wide">Master password<span class="password-wrap"><input id="master" type="password" autocomplete="current-password"><button id="reveal" type="button" class="inline">Reveal</button></span></label>
+        <label>Length<input id="length" type="number" min="1" max="128" value="16"></label><label>Counter<input id="counter" type="number" min="1" value="1"></label><label class="wide">Excluded characters<input id="exclude" autocomplete="off"></label>
+        <fieldset class="wide"><legend>Character classes</legend><label><input id="lower" type="checkbox" checked> Lowercase</label><label><input id="upper" type="checkbox" checked> Uppercase</label><label><input id="digits" type="checkbox" checked> Digits</label><label><input id="symbols" type="checkbox" checked> Symbols</label></fieldset>
+        <div class="wide actions"><button id="generate" class="button" disabled>Generate</button><button id="copy" class="button secondary" disabled>Copy</button><button id="clear" class="button ghost">Clear</button></div>
+        <output id="result" class="wide" aria-live="polite">Your generated password appears here</output><p id="message" class="wide status"></p>
+      </div><div class="privacy-line">No network requests. No password database.</div></div></div>
     </section>
     <section id="downloads"><p class="eyebrow">DOWNLOADS</p><h2>Choose your interface</h2><div class="cards">
       <article><span class="tag">DESKTOP</span><h3>GUI</h3><p>Visual controls, secure masked input, and clipboard clearing.</p><div class="links"><a href="/downloads/gopass-gui-linux-amd64.tar.gz">Linux x86_64</a><a href="/downloads/gopass-gui-linux-arm64.tar.gz">Linux ARM64</a></div></article>
@@ -27,5 +34,6 @@
     <section class="privacy" id="privacy"><p class="eyebrow">PRIVACY</p><h2>Your master password stays yours.</h2><p>The desktop and browser apps derive passwords locally. The website has no analytics, accounts, cookies, or backend API. Source and releases remain available under BSD-3-Clause.</p></section>
   </main>
   <footer><span>© 2026 <a href="https://waozi.xyz">Waozi</a></span></footer>
+<script src="home.js"></script>
 </body>
 </html>

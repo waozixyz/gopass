@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3] - 2026-08-17
+
+- Generate passwords directly on the website's home page: the full browser
+  generator now runs in the front-page card, with no separate page to open.
+- The browser generator loads only when you start using it, keeping the
+  front page fast for everyone else.
+- The standalone web app page remains available with the same generator.
+
 ## [0.1.2] - 2026-08-17
 
 - Make keyboard navigation reliable: click a field, then use Tab and Shift+Tab
