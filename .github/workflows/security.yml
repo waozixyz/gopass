@@ -25,7 +25,7 @@ jobs:
             echo "scanner failed to detect the canary" >&2
             exit 1
           fi
-          if scripts/privacy_scan.sh /tmp/canary-terms scripts; then
+          if ! scripts/privacy_scan.sh /tmp/canary-terms scripts; then
             echo "scanner reported a false positive on its own source" >&2
             exit 1
           fi
