@@ -46,10 +46,67 @@ gopass --length 24 --counter 2 example.com alice
 gopass --no-symbols --exclude '0O1Il' example.com alice
 ```
 
-`--copy` sends the result through standard input to an available clipboard
-program (`wl-copy`, `xclip`, `xsel`, `pbcopy`, or `clip.exe`) and does not print
-the generated password. The command reports an error if no supported clipboard
-tool can be used.
+`--copy` sends the result to the clipboard without printing it. On Linux a
+built-in pure-Go X11 clipboard is used when an X server (X.Org, Xlibre, or
+XWayland) is reachable, so no external tool is needed; otherwise `gopass`
+falls back to `wl-copy`, `xclip`, `xsel`, `pbcopy`, or `clip.exe` and reports
+an error if none can be used. The copied password is served by a small
+detached process and disappears when another application takes the clipboard;
+`--clear-after 90s` releases it automatically after a delay (built-in X11
+clipboard only), and `--read-clipboard` prints the current contents.
+
+## Profiles
+
+An optional configuration file at `$XDG_CONFIG_HOME/gopass/profiles.json`
+(usually `~/.config/gopass/profiles.json`) can store named profiles — a login
+plus default settings — so daily invocations shrink to one flag:
+
+```sh
+gopass --profile work example.com
+```
+
+```json
+{
+  "vault": "~/.secret_vault",
+  "copy": true,
+  "clear_after": "90s",
+  "profiles": {
+    "work": {"login": "alice", "counter": 9, "length": 23, "symbols": false}
+  }
+}
+```
+
+Profiles hold no secrets. Command-line flags always win over profile values,
+and without a configuration file gopass behaves exactly as before.
+
+## Master password from a vault
+
+`--vault PATH` reads the master password from a file encrypted with OpenSSL:
+
+```sh
+printf 'master password' | openssl enc -aes-256-cbc -md sha512 -a \
+    -pbkdf2 -iter 100000 -salt -pass pass:... > ~/.secret_vault
+gopass --vault ~/.secret_vault example.com alice
+```
+
+The vault passphrase is requested on the terminal with echo disabled, or read
+from piped standard input, and the decrypted contents are used as the master
+password — the master itself never appears in argv or the environment. The
+vault path can also be set once in the profiles file.
+
+## The `pass` shorthand
+
+Copying or symlinking the binary as `pass` enables a compact personal mode
+built on profiles:
+
+```sh
+ln -s gopass ~/bin/pass
+pass work example.com
+```
+
+`pass PROFILE SITE` copies the password without printing it and clears the
+clipboard after 90 seconds (`-timeout 30s` to change, `-timeout 0` to keep it
+until another application takes over).
 
 Run `gopass --help` for all flags.
 

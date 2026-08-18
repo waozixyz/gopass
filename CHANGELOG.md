@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.0] - 2026-08-18
+
+- Copy passwords through a built-in pure-Go X11 clipboard on Linux, with no
+  external clipboard tool required; other systems keep using wl-copy, xclip,
+  xsel, pbcopy, or clip.exe.
+- Clear copied passwords automatically after a delay with `--clear-after`;
+  by default they stay until another application takes the clipboard.
+- Read the master password from an OpenSSL-encrypted vault with `--vault`;
+  the vault passphrase is asked for on the terminal or read from piped input,
+  so the master password never appears in argv or the environment.
+- Save named profiles (a login plus default settings) in an optional
+  configuration file and generate with `--profile`.
+- Print the current clipboard contents with `--read-clipboard`.
+- Install the binary as `pass` to use the compact `pass PROFILE SITE` form,
+  which copies without printing.
+
 ## [0.1.3] - 2026-08-17
 
 - Generate passwords directly on the website's home page: the full browser
