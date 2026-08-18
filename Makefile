@@ -5,13 +5,14 @@ DATA_DIR ?= $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)
 
 KRYON_ARCH ?= $(shell uname -m)
 KRYON_BUILD_DIR := vendor/kryon/build/linux-$(KRYON_ARCH)
+KRYON_RUNTIME_SOURCES := $(shell find vendor/kryon/src vendor/kryon/include -type f)
 
 all: cli gui
 
 cli:
 	go build -o gopass ./cmd/gopass
 
-$(KRYON_BUILD_DIR)/libkryon.a:
+$(KRYON_BUILD_DIR)/libkryon.a: $(KRYON_RUNTIME_SOURCES) vendor/kryon/Makefile
 	$(MAKE) -C vendor/kryon -f Makefile all
 
 gui: $(KRYON_BUILD_DIR)/libkryon.a
