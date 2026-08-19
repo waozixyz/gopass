@@ -148,6 +148,43 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
+      - name: Generate Update Appcast
+        if: steps.version.outputs.released == 'true'
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^const Version = "\([^"]*\)"/\1/p' version.go)
+          TAG="v$VERSION"
+          BASE="https://github.com/waozixyz/gopass/releases/download/$TAG"
+          # appcast channel names use dpkg arch naming (amd64/arm64);
+          # the artifacts use uname -m naming (x86_64/aarch64)
+          arch_name() {
+            case "$1" in
+              x86_64) echo amd64 ;;
+              aarch64|arm64) echo arm64 ;;
+              *) echo "$1" ;;
+            esac
+          }
+          channels=()
+          for img in build/artifacts/*.AppImage; do
+            [ -e "$img" ] || continue
+            arch=$(basename "$img" | sed -n 's/^gopass-.*-\([^-]*\)\.AppImage$/\1/p')
+            channels+=("--channel" "appimage-$(arch_name "$arch")=$img")
+          done
+          DEB="$(find build/artifacts -maxdepth 1 -name '*.deb' -print -quit || true)"
+          TAR="$(find build/artifacts -maxdepth 1 -name 'gopass-gui-linux-*.tar.gz' -print -quit || true)"
+          [ -n "$DEB" ] && channels+=("--channel" "deb=$DEB")
+          [ -n "$TAR" ] && channels+=("--channel" "tarball=$TAR")
+          if [ ${#channels[@]} -eq 0 ]; then
+            echo "no release artifacts found for the appcast"
+            exit 1
+          fi
+          python3 vendor/kryon/scripts/make_appcast.py \
+            --version "$VERSION" \
+            --base-url "$BASE" \
+            --notes-url "https://github.com/waozixyz/gopass/releases/tag/$TAG" \
+            --changelog CHANGELOG.md \
+            --out build/artifacts/appcast.json \
+            "${channels[@]}"
       - name: Publish GitHub release
         if: steps.version.outputs.released == 'true'
         uses: softprops/action-gh-release@v2

@@ -37,7 +37,6 @@ func newApp() *app {
 func main() {
 	kryui.SetConfigFlags(kryui.FlagWindowResizable)
 	kryui.InitWindow(720, 690, "gopass")
-	defer kryui.CloseWindow()
 	icon := kryui.LoadImageFromMemory(".png", appIconPNG)
 	kryui.SetWindowIcon(icon)
 	kryui.UnloadImage(icon)
@@ -55,9 +54,10 @@ func main() {
 	kryui.EnableEventWaiting()
 
 	a := newApp()
-	defer func() { a.master.Clear(); a.clipboard.clear() }()
-	for !kryui.WindowShouldClose() {
+	updateCheckStart()
+	for !kryui.WindowShouldClose() && !updateQuitRequested() {
 		a.clipboard.tick()
+		updatePoll()
 		kryui.BeginDrawing()
 		w := kryui.GetScreenWidth()
 		kryui.BeginUI(kryui.Key("gopass/main"))
@@ -66,6 +66,12 @@ func main() {
 		a.handleUIEvents()
 		kryui.EndDrawing()
 	}
+	a.master.Clear()
+	a.clipboard.clear()
+	kryui.CloseWindow()
+	// With the window down and secrets cleared, a pending update re-execs
+	// the staged AppImage here.
+	updateExecAfterUI()
 }
 
 func (a *app) draw(width int32) {
@@ -131,6 +137,8 @@ func (a *app) draw(width int32) {
 	if a.message != "" {
 		kryui.DrawUIText(a.message, x+42, y+45, kryui.UIText12, scheme.OnSurfaceVariant)
 	}
+
+	a.updateDrawRow(x+24, 92+550+18, contentW-48)
 }
 
 func (a *app) field(label string, field *kryui.TextFieldState, x, y, width int32, style kryui.UITextInputStyle) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2026-08-19
+
+- The desktop GUI now checks for new releases and can update itself: AppImage
+  builds download the checksum-verified update and restart straight into it,
+  while tarball and Debian package installs get a link to the release page.
+
 ## [0.2.0] - 2026-08-18
 
 - Copy passwords through a built-in pure-Go X11 clipboard on Linux, with no
