@@ -1,6 +1,6 @@
 {
-  "name": "gopass",
-  "short_name": "gopass",
+  "name": "pass",
+  "short_name": "pass",
   "description": "Generate deterministic passwords locally.",
   "start_url": "/app/",
   "scope": "/app/",

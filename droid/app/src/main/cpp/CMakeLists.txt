@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
-project(Gopass C)
+project(Pass C)
 
 set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../..")
 set(KRYON_DIR "${REPO_ROOT}/vendor/kryon")
 set(RAYLIB_DIR "${KRYON_DIR}/vendor/raylib/src")
-set(GOPASS_NATIVE_DIR "${REPO_ROOT}/native")
+set(PASS_NATIVE_DIR "${REPO_ROOT}/native")
 set(NATIVE_APP_GLUE_DIR "${ANDROID_NDK}/sources/android/native_app_glue")
 
 file(GLOB_RECURSE KRYON_SOURCES CONFIGURE_DEPENDS "${KRYON_DIR}/src/*.c")
@@ -12,23 +12,24 @@ file(GLOB_RECURSE KRYON_SOURCES CONFIGURE_DEPENDS "${KRYON_DIR}/src/*.c")
 # no-raylib hosts; Android links real raylib, so compiling both is a
 # duplicate-symbol link error.
 list(FILTER KRYON_SOURCES EXCLUDE REGEX "${KRYON_DIR}/src/backend/.*")
-# gopass uses no 2D physics; mirror the desktop Makefile's physics filter.
+# pass uses no 2D physics; mirror the desktop Makefile's physics filter.
 list(REMOVE_ITEM KRYON_SOURCES
     "${KRYON_DIR}/src/scene/physics_world.c"
     "${KRYON_DIR}/src/scene/node_body2d.c"
     "${KRYON_DIR}/src/scene/node_area2d.c"
     "${KRYON_DIR}/src/scene/node_collision_shape2d.c")
-# Ksync account crypto requires liboqs and gopass never syncs; runtime asset
-# downloads need an Android download backend gopass does not provide.
+# Ksync account crypto requires liboqs and pass never syncs; runtime asset
+# downloads need an Android download backend pass does not provide.
 list(FILTER KRYON_SOURCES EXCLUDE REGEX "${KRYON_DIR}/src/ksync/.*")
 list(FILTER KRYON_SOURCES EXCLUDE REGEX "${KRYON_DIR}/src/runtime_assets/.*")
+list(FILTER KRYON_SOURCES EXCLUDE REGEX "${KRYON_DIR}/src/notification/.*")
 list(REMOVE_ITEM KRYON_SOURCES "${KRYON_DIR}/src/file_dialog/file_dialog.c")
 
-set(GOPASS_FONT_ASSET "vendor/kryon/fonts/noto/NotoSans-Regular.ttf")
-set(GOPASS_EMBEDDED_ASSETS_C "${CMAKE_BINARY_DIR}/gopass_embedded_assets.c")
+set(PASS_FONT_ASSET "vendor/kryon/fonts/noto/NotoSans-Regular.ttf")
+set(PASS_EMBEDDED_ASSETS_C "${CMAKE_BINARY_DIR}/pass_embedded_assets.c")
 add_custom_command(
-    OUTPUT "${GOPASS_EMBEDDED_ASSETS_C}"
-    COMMAND sh "${KRYON_DIR}/scripts/embed-assets.sh" "${GOPASS_EMBEDDED_ASSETS_C}" "${GOPASS_FONT_ASSET}"
+    OUTPUT "${PASS_EMBEDDED_ASSETS_C}"
+    COMMAND sh "${KRYON_DIR}/scripts/embed-assets.sh" "${PASS_EMBEDDED_ASSETS_C}" "${PASS_FONT_ASSET}"
     DEPENDS "${KRYON_DIR}/scripts/embed-assets.sh" "${KRYON_DIR}/fonts/noto/NotoSans-Regular.ttf"
     WORKING_DIRECTORY "${REPO_ROOT}"
     VERBATIM
@@ -73,10 +74,10 @@ target_include_directories(raylib PUBLIC
 
 add_library(main SHARED
     main.c
-    gopass_app.c
+    pass_app.c
     android_bridge.c
-    "${GOPASS_NATIVE_DIR}/gopass_core.c"
-    "${GOPASS_EMBEDDED_ASSETS_C}"
+    "${PASS_NATIVE_DIR}/pass_core.c"
+    "${PASS_EMBEDDED_ASSETS_C}"
     ${KRYON_SOURCES}
     "${NATIVE_APP_GLUE_DIR}/android_native_app_glue.c"
 )
@@ -84,7 +85,7 @@ add_library(main SHARED
 target_include_directories(main PRIVATE
     "${KRYON_DIR}/include"
     "${KRYON_DIR}/src"
-    "${GOPASS_NATIVE_DIR}"
+    "${PASS_NATIVE_DIR}"
     "${NATIVE_APP_GLUE_DIR}"
 )
 

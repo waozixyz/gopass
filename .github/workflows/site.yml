@@ -28,10 +28,10 @@ jobs:
           make site
           test -s build/site/index.html
           test -s build/site/app/index.html
-          test -s build/site/app/gopass.wasm
+          test -s build/site/app/pass.wasm
       - uses: actions/upload-artifact@v4
         with:
-          name: gopass-site
+          name: pass-site
           path: build/site
           if-no-files-found: error
 
@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: gopass-site
+          name: pass-site
           path: build/site
       - name: Install Netlify CLI
         run: npm install --global netlify-cli
@@ -71,15 +71,15 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: gopass-site
+          name: pass-site
           path: build/site
       - name: Package Site
         run: |
           set -euo pipefail
           test -s build/site/index.html
           cd build/site
-          zip -qr ../gopass-site.zip .
-          test -s ../gopass-site.zip
+          zip -qr ../pass-site.zip .
+          test -s ../pass-site.zip
       - name: Deploy Production To Netlify
         run: |
           set -euo pipefail
@@ -92,7 +92,7 @@ jobs:
             -X POST \
             -H "Authorization: Bearer $auth_token" \
             -H "Content-Type: application/zip" \
-            --data-binary "@build/gopass-site.zip" \
+            --data-binary "@build/pass-site.zip" \
             "https://api.netlify.com/api/v1/sites/$site_id/deploys")"
 
           python3 -c 'import json, sys; deploy = json.loads(sys.argv[1]); state = deploy.get("state", ""); url = deploy.get("ssl_url") or deploy.get("url") or deploy.get("deploy_ssl_url") or deploy.get("deploy_url") or deploy.get("id"); print(f"Netlify deploy {state}: {url}"); raise SystemExit(1 if state in ("error", "failed") else 0)' "$response"

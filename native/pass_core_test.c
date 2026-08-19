@@ -1,7 +1,7 @@
-/* Host-buildable vector test for gopass_core.c. The vectors are copied from
- * the Go tests (gopass_test.go) so the C generator stays byte-compatible. */
+/* Host-buildable vector test for pass_core.c. The vectors are copied from
+ * the Go tests (pass_test.go) so the C generator stays byte-compatible. */
 
-#include "gopass_core.h"
+#include "pass_core.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +11,7 @@ static int failures = 0;
 
 static void
 check_generate(int index, const char *site, const char *login, const char *master,
-               GopassOptions options, const char *want, int want_error)
+               PassOptions options, const char *want, int want_error)
 {
     char out[256];
     char err[256];
@@ -19,7 +19,7 @@ check_generate(int index, const char *site, const char *login, const char *maste
 
     memset(out, 0, sizeof(out));
     memset(err, 0, sizeof(err));
-    result = gopass_generate(site, login, master, &options, out, sizeof(out), err, sizeof(err));
+    result = pass_generate(site, login, master, &options, out, sizeof(out), err, sizeof(err));
 
     if(want_error) {
         if(result == 0) {
@@ -52,7 +52,7 @@ check_derive(int index, const char *password, const char *salt, const char *want
     char hex[65];
     int i;
 
-    gopass_derive_key(password, strlen(password), salt, strlen(salt), out);
+    pass_derive_key(password, strlen(password), salt, strlen(salt), out);
     for(i = 0; i < 32; i++)
         sprintf(hex + i * 2, "%02x", out[i]);
     hex[64] = '\0';
@@ -68,7 +68,7 @@ check_derive(int index, const char *password, const char *salt, const char *want
 static void
 check_shape(void)
 {
-    GopassOptions options;
+    PassOptions options;
     char out[256];
     char err[256];
     static const char *exclude = "abcXYZ019!@";
@@ -87,7 +87,7 @@ check_shape(void)
     options.symbols = 1;
     options.exclude = exclude;
 
-    if(gopass_generate("host", "account", "secret", &options, out, sizeof(out), err, sizeof(err)) != 0) {
+    if(pass_generate("host", "account", "secret", &options, out, sizeof(out), err, sizeof(err)) != 0) {
         printf("FAIL shape: %s\n", err);
         failures++;
         return;
@@ -129,7 +129,7 @@ check_shape(void)
 int
 main(void)
 {
-    GopassOptions defaults;
+    PassOptions defaults;
 
     check_derive(1, "password", "salt",
         "0394a2ede332c9a13eb82e9b24631604c31df978b4e2f0fbd2c549944f9d79a5");
@@ -149,7 +149,7 @@ main(void)
                    defaults, "&vLf44D'/cSkP-_8", 0);
 
     {
-        GopassOptions o = defaults;
+        PassOptions o = defaults;
 
         o.length = 20;
         o.counter = 2;
@@ -158,7 +158,7 @@ main(void)
     }
 
     {
-        GopassOptions o;
+        PassOptions o;
 
         memset(&o, 0, sizeof(o));
         o.length = 12;
@@ -171,7 +171,7 @@ main(void)
     }
 
     {
-        GopassOptions o = defaults;
+        PassOptions o = defaults;
 
         o.length = 24;
         o.exclude = "0Ool1I!|";
@@ -180,7 +180,7 @@ main(void)
     }
 
     {
-        GopassOptions o;
+        PassOptions o;
 
         memset(&o, 0, sizeof(o));
         o.length = 4;
@@ -191,7 +191,7 @@ main(void)
     }
 
     {
-        GopassOptions o;
+        PassOptions o;
 
         memset(&o, 0, sizeof(o));
         o.length = 0;
@@ -200,7 +200,7 @@ main(void)
     }
 
     {
-        GopassOptions o;
+        PassOptions o;
 
         memset(&o, 0, sizeof(o));
         o.length = 8;
@@ -208,7 +208,7 @@ main(void)
     }
 
     {
-        GopassOptions o;
+        PassOptions o;
 
         memset(&o, 0, sizeof(o));
         o.length = 2;
@@ -219,7 +219,7 @@ main(void)
     }
 
     {
-        GopassOptions o;
+        PassOptions o;
 
         memset(&o, 0, sizeof(o));
         o.length = 8;

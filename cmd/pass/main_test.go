@@ -7,15 +7,15 @@ import (
 	"strings"
 	"testing"
 
-	password "github.com/waozixyz/gopass"
+	password "github.com/waozixyz/pass"
 )
 
 // TestMain isolates every test in this package from the developer's real
-// profiles file: without this, a machine with ~/.config/gopass/profiles.json
+// profiles file: without this, a machine with ~/.config/pass/profiles.json
 // would feed private configuration into the tests.
 func TestMain(m *testing.M) {
 	configPath = func() string {
-		return filepath.Join(os.TempDir(), "gopass-tests-absent-profiles.json")
+		return filepath.Join(os.TempDir(), "pass-tests-absent-profiles.json")
 	}
 	os.Exit(m.Run())
 }
@@ -64,8 +64,8 @@ func TestRunInformationOptions(t *testing.T) {
 		argument string
 		want     string
 	}{
-		{"--version", "gopass " + password.Version},
-		{"--help", "Usage: gopass"},
+		{"--version", "pass " + password.Version},
+		{"--help", "Usage: pass"},
 	} {
 		var output, diagnostics bytes.Buffer
 		if err := run([]string{test.argument}, &output, &diagnostics); err != nil {

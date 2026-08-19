@@ -1,4 +1,4 @@
-name "gopass"
+name "pass"
 generated "build/kryon/generated"
 default_target "Run"
 

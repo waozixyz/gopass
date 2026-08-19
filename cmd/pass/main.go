@@ -7,18 +7,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	password "github.com/waozixyz/gopass"
-	"github.com/waozixyz/gopass/vault"
+	password "github.com/waozixyz/pass"
+	"github.com/waozixyz/pass/vault"
 )
 
 const environmentVariable = "LESSPASS_MASTER_PASSWORD"
 
 // promptVaultPassphrase asks for the vault passphrase on the terminal, or
-// reads it from standard input when stdin is piped ("echo pw | gopass ...").
+// reads it from standard input when stdin is piped ("echo pw | pass ...").
 func promptVaultPassphrase() (string, error) {
 	if info, err := os.Stdin.Stat(); err == nil && info.Mode()&os.ModeCharDevice == 0 {
 		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
@@ -34,16 +33,8 @@ func promptVaultPassphrase() (string, error) {
 var readVaultPassphrase = promptVaultPassphrase
 
 func main() {
-	arguments := os.Args[1:]
-	if filepath.Base(os.Args[0]) == "pass" {
-		translated, ok := translatePassArguments(arguments)
-		if !ok {
-			os.Exit(2)
-		}
-		arguments = translated
-	}
-	if err := run(arguments, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintf(os.Stderr, "gopass: %v\n", err)
+	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintf(os.Stderr, "pass: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -55,7 +46,7 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 	}
 
 	options := password.DefaultOptions()
-	flags := flag.NewFlagSet("gopass", flag.ContinueOnError)
+	flags := flag.NewFlagSet("pass", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() { printHelp(stderr) }
 
@@ -117,7 +108,7 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 		options.Symbols = false
 	}
 	if showVersion {
-		fmt.Fprintf(stdout, "gopass %s\n", password.Version)
+		fmt.Fprintf(stdout, "pass %s\n", password.Version)
 		return nil
 	}
 	if serveClipboard {
@@ -291,9 +282,9 @@ func masterPassword(positional []string, forcePrompt bool, vaultPath string) (st
 }
 
 func printHelp(output io.Writer) {
-	fmt.Fprintln(output, `Usage: gopass [OPTIONS] SITE LOGIN [MASTER_PASSWORD]
+	fmt.Fprintln(output, `Usage: pass [OPTIONS] SITE LOGIN [MASTER_PASSWORD]
 
-Derive a site-specific password. If MASTER_PASSWORD is omitted, gopass reads
+Derive a site-specific password. If MASTER_PASSWORD is omitted, pass reads
 LESSPASS_MASTER_PASSWORD or asks for it on the controlling terminal. With
 --vault it instead decrypts an OpenSSL-encrypted vault and uses its contents
 as the master password. With --profile, a named profile from the

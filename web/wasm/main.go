@@ -5,7 +5,7 @@ package main
 import (
 	"syscall/js"
 
-	password "github.com/waozixyz/gopass"
+	password "github.com/waozixyz/pass"
 )
 
 func generate(_ js.Value, args []js.Value) any {
@@ -25,7 +25,7 @@ func generate(_ js.Value, args []js.Value) any {
 
 func main() {
 	fn := js.FuncOf(generate)
-	js.Global().Set("gopassGenerate", fn)
-	js.Global().Get("document").Call("dispatchEvent", js.Global().Get("CustomEvent").New("gopass-ready"))
+	js.Global().Set("passGenerate", fn)
+	js.Global().Get("document").Call("dispatchEvent", js.Global().Get("CustomEvent").New("pass-ready"))
 	select {}
 }

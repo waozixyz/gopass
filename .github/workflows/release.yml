@@ -32,11 +32,11 @@ jobs:
           TARGET_ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
-          name="gopass-cli-${TARGET_OS}-${TARGET_ARCH}"
+          name="pass-cli-${TARGET_OS}-${TARGET_ARCH}"
           mkdir -p "build/release/$name"
           suffix=""
           [ "$TARGET_OS" = windows ] && suffix=".exe"
-          CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" go build -trimpath -ldflags='-s -w' -o "build/release/$name/gopass$suffix" ./cmd/gopass
+          CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" go build -trimpath -ldflags='-s -w' -o "build/release/$name/pass$suffix" ./cmd/pass
           cp LICENSE README.md "build/release/$name/"
           if [ "$TARGET_OS" = windows ]; then
             (cd build/release && zip -qr "$name.zip" "$name")
@@ -46,7 +46,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.os }}-${{ matrix.arch }}
-          path: build/release/gopass-cli-${{ matrix.os }}-${{ matrix.arch }}.*
+          path: build/release/pass-cli-${{ matrix.os }}-${{ matrix.arch }}.*
           if-no-files-found: error
 
   gui:
@@ -75,9 +75,9 @@ jobs:
       - run: make gui
       - name: Package GUI tarball and Debian package
         run: |
-          name="gopass-gui-linux-${{ matrix.arch }}"
+          name="pass-gui-linux-${{ matrix.arch }}"
           mkdir -p "build/release/$name"
-          cp build/gopass-gui LICENSE README.md "build/release/$name/"
+          cp build/pass-gui LICENSE README.md "build/release/$name/"
           tar -C build/release -czf "build/release/$name.tar.gz" "$name"
           make package-deb
       - name: Package AppImage
@@ -94,7 +94,7 @@ jobs:
         with:
           name: gui-linux-${{ matrix.arch }}
           path: |
-            build/release/gopass-gui-linux-${{ matrix.arch }}.tar.gz
+            build/release/pass-gui-linux-${{ matrix.arch }}.tar.gz
             build/release/*.deb
             build/release/*.AppImage
           if-no-files-found: error
@@ -108,11 +108,11 @@ jobs:
           go-version: 1.24.x
           cache: false
       - run: make site
-      - run: cd build/site && zip -qr ../gopass-web.zip .
+      - run: cd build/site && zip -qr ../pass-web.zip .
       - uses: actions/upload-artifact@v4
         with:
           name: web
-          path: build/gopass-web.zip
+          path: build/pass-web.zip
           if-no-files-found: error
 
   publish:
@@ -154,7 +154,7 @@ jobs:
           set -euo pipefail
           VERSION=$(sed -n 's/^const Version = "\([^"]*\)"/\1/p' version.go)
           TAG="v$VERSION"
-          BASE="https://github.com/waozixyz/gopass/releases/download/$TAG"
+          BASE="https://github.com/waozixyz/pass/releases/download/$TAG"
           # appcast channel names use dpkg arch naming (amd64/arm64);
           # the artifacts use uname -m naming (x86_64/aarch64)
           arch_name() {
@@ -167,11 +167,11 @@ jobs:
           channels=()
           for img in build/artifacts/*.AppImage; do
             [ -e "$img" ] || continue
-            arch=$(basename "$img" | sed -n 's/^gopass-.*-\([^-]*\)\.AppImage$/\1/p')
+            arch=$(basename "$img" | sed -n 's/^pass-.*-\([^-]*\)\.AppImage$/\1/p')
             channels+=("--channel" "appimage-$(arch_name "$arch")=$img")
           done
           DEB="$(find build/artifacts -maxdepth 1 -name '*.deb' -print -quit || true)"
-          TAR="$(find build/artifacts -maxdepth 1 -name 'gopass-gui-linux-*.tar.gz' -print -quit || true)"
+          TAR="$(find build/artifacts -maxdepth 1 -name 'pass-gui-linux-*.tar.gz' -print -quit || true)"
           [ -n "$DEB" ] && channels+=("--channel" "deb=$DEB")
           [ -n "$TAR" ] && channels+=("--channel" "tarball=$TAR")
           if [ ${#channels[@]} -eq 0 ]; then
@@ -181,7 +181,7 @@ jobs:
           python3 vendor/kryon/scripts/make_appcast.py \
             --version "$VERSION" \
             --base-url "$BASE" \
-            --notes-url "https://github.com/waozixyz/gopass/releases/tag/$TAG" \
+            --notes-url "https://github.com/waozixyz/pass/releases/tag/$TAG" \
             --changelog CHANGELOG.md \
             --out build/artifacts/appcast.json \
             "${channels[@]}"

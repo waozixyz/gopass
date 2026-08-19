@@ -1,5 +1,5 @@
-// Package gopass derives site-specific passwords without storing them.
-package gopass
+// Package pass derives site-specific passwords without storing them.
+package pass
 
 import (
 	"errors"

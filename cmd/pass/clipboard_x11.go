@@ -29,7 +29,7 @@ const (
 	atomPlainUTF8 = "text/plain;charset=utf-8"
 	atomTargets   = "TARGETS"
 	atomMultiple  = "MULTIPLE"
-	propName      = "GOPASS_SELECTION"
+	propName      = "PASS_SELECTION"
 )
 
 type xAtoms map[string]xproto.Atom

@@ -1,4 +1,4 @@
-package gopass
+package pass
 
 import (
 	"crypto/hmac"

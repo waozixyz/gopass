@@ -1,17 +1,17 @@
 package main
 
 // Desktop update flow over kryon's kry_update_flow: check the release
-// appcast once per session, toast when a newer gopass exists, and offer
+// appcast once per session, toast when a newer pass exists, and offer
 // download + restart in a small row under the main card. AppImage builds
 // self-update (verified download, atomic swap, re-exec); tarball, deb and
 // source installs stay on the release link.
 
 import (
-	password "github.com/waozixyz/gopass"
 	"github.com/waozixyz/kryon/go/kryui"
+	password "github.com/waozixyz/pass"
 )
 
-const appcastURL = "https://github.com/waozixyz/gopass/releases/latest/download/appcast.json"
+const appcastURL = "https://github.com/waozixyz/pass/releases/latest/download/appcast.json"
 
 const updateButtonID = 510
 
@@ -22,7 +22,7 @@ var (
 )
 
 func updateCheckStart() {
-	updater = kryui.StartUpdateFlow("gopass", password.Version, appcastURL)
+	updater = kryui.StartUpdateFlow("pass", password.Version, appcastURL)
 }
 
 func updatePoll() {
@@ -33,7 +33,7 @@ func updatePoll() {
 	if !updateNoticed && updater.State() == kryui.UpdateFlowAvailable {
 		updateNoticed = true
 		if updater.HasArtifact() {
-			kryui.ShowToast("gopass " + updater.NewVersion() + " available — update below")
+			kryui.ShowToast("pass " + updater.NewVersion() + " available — update below")
 		}
 	}
 }
@@ -65,10 +65,10 @@ func (a *app) updateDrawRow(x, y, width int32) bool {
 			if updater.ReleaseURL() == "" {
 				return false
 			}
-			kryui.DrawUIText("gopass "+updater.NewVersion()+" available", x, y, kryui.UIText12, scheme.OnSurfaceVariant)
+			kryui.DrawUIText("pass "+updater.NewVersion()+" available", x, y, kryui.UIText12, scheme.OnSurfaceVariant)
 			return true
 		}
-		kryui.DrawUIText("gopass "+updater.NewVersion()+" available", x, y, kryui.UIText12, scheme.OnSurfaceVariant)
+		kryui.DrawUIText("pass "+updater.NewVersion()+" available", x, y, kryui.UIText12, scheme.OnSurfaceVariant)
 		if kryui.Button(kryui.ButtonProps{
 			Bounds: kryui.NewRectangle(float32(x+width-96), float32(y-14), 96, 32),
 			Label:  "Download", Style: kryui.UIButtonStyleSecondary, ID: updateButtonID,
@@ -82,7 +82,7 @@ func (a *app) updateDrawRow(x, y, width int32) bool {
 		}
 		kryui.DrawUIText("Downloading… "+itoa(pct)+"%", x, y, kryui.UIText12, scheme.OnSurfaceVariant)
 	case kryui.UpdateFlowReady:
-		kryui.DrawUIText("gopass "+updater.NewVersion()+" ready to install", x, y, kryui.UIText12, scheme.OnSurfaceVariant)
+		kryui.DrawUIText("pass "+updater.NewVersion()+" ready to install", x, y, kryui.UIText12, scheme.OnSurfaceVariant)
 		if kryui.Button(kryui.ButtonProps{
 			Bounds: kryui.NewRectangle(float32(x+width-150), float32(y-14), 150, 32),
 			Label:  "Restart to update", Style: kryui.UIButtonStylePrimary, ID: updateButtonID,

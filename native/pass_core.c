@@ -1,8 +1,8 @@
-/* C port of the gopass Go generator (gopass.go, pbkdf2.go). The output is
- * byte-identical to the Go implementation; native/gopass_core_test.c checks
+/* C port of the pass Go generator (pass.go, pbkdf2.go). The output is
+ * byte-identical to the Go implementation; native/pass_core_test.c checks
  * the same fixed vectors the Go tests use. */
 
-#include "gopass_core.h"
+#include "pass_core.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -217,7 +217,7 @@ hmac_sha256(const void *key, size_t key_len,
 /* ------------------------------------------------------------------ */
 
 void
-gopass_derive_key(const char *password, size_t password_len,
+pass_derive_key(const char *password, size_t password_len,
                   const char *salt, size_t salt_len,
                   uint8_t out[32])
 {
@@ -241,7 +241,7 @@ gopass_derive_key(const char *password, size_t password_len,
     hmac_sha256(password, password_len, block_input, input_len, previous);
     memcpy(out, previous, 32);
 
-    for(round = 1; round < GOPASS_DERIVATION_ROUNDS; round++) {
+    for(round = 1; round < PASS_DERIVATION_ROUNDS; round++) {
         hmac_sha256(password, password_len, previous, 32, previous);
         for(int i = 0; i < 32; i++)
             out[i] ^= previous[i];
@@ -303,8 +303,8 @@ class_filtered(const char *characters, const char *exclude, char *out, int out_s
 }
 
 int
-gopass_generate(const char *site, const char *login, const char *master,
-                const GopassOptions *options,
+pass_generate(const char *site, const char *login, const char *master,
+                const PassOptions *options,
                 char *out, size_t out_size,
                 char *err, size_t err_size)
 {
@@ -380,7 +380,7 @@ gopass_generate(const char *site, const char *login, const char *master,
     salt_len += (size_t)snprintf(salt + salt_len, sizeof(salt) - salt_len,
                                  "%llu", (unsigned long long)options->counter);
 
-    gopass_derive_key(master != NULL ? master : "", master != NULL ? strlen(master) : 0,
+    pass_derive_key(master != NULL ? master : "", master != NULL ? strlen(master) : 0,
                       salt, salt_len, entropy);
 
     password_length = options->length - class_count;

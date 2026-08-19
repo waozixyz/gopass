@@ -55,7 +55,7 @@ jobs:
         run: |
           test -s build/site/index.html
           test -s build/site/app/index.html
-          test -s build/site/app/gopass.wasm
+          test -s build/site/app/pass.wasm
       - name: Check formatting
         run: test -z "$(find . -path ./vendor -prune -o -name '*.go' -type f -print | xargs gofmt -l)"
 
@@ -90,6 +90,6 @@ jobs:
         run: make package-deb
       - uses: actions/upload-artifact@v4
         with:
-          name: gopass-gui-linux-${{ matrix.arch }}
-          path: build/gopass-gui
+          name: pass-gui-linux-${{ matrix.arch }}
+          path: build/pass-gui
           if-no-files-found: error

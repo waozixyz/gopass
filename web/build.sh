@@ -22,8 +22,8 @@ cp -R "$root_dir/web/site/app/icons" "$out_dir/app/icons"
 cp "$root_dir/web/site/app/sw.js" "$out_dir/app/sw.js"
 cp "$goroot/lib/wasm/wasm_exec.js" "$out_dir/app/wasm_exec.js" 2>/dev/null || \
 	cp "$goroot/misc/wasm/wasm_exec.js" "$out_dir/app/wasm_exec.js"
-(cd "$root_dir/web/wasm" && GOOS=js GOARCH=wasm go build -o "$out_dir/app/gopass.wasm" .)
+(cd "$root_dir/web/wasm" && GOOS=js GOARCH=wasm go build -o "$out_dir/app/pass.wasm" .)
 
-test -s "$out_dir/app/gopass.wasm"
+test -s "$out_dir/app/pass.wasm"
 test -s "$out_dir/home.js"
 printf 'built site at %s\n' "$out_dir"

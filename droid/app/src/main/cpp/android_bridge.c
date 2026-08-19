@@ -1,4 +1,4 @@
-/* Minimal JNI bridge for the gopass Android app: safe-area insets, display
+/* Minimal JNI bridge for the pass Android app: safe-area insets, display
  * density, soft-keyboard visibility, and soft-keyboard text input. Modeled
  * on inbe's android_device.c / android_insets.c. */
 
@@ -7,12 +7,15 @@
 #if ANDROID_BUILD
 
 #include "kryon.h"
+#include "theme.h"
 #include "ui_dpi.h"
 
 #include <android/log.h>
 #include <android_native_app_glue.h>
 #include <jni.h>
 #include <pthread.h>
+#include <stdio.h>
+#include <string.h>
 
 extern struct android_app *GetAndroidApp(void);
 
@@ -20,7 +23,7 @@ extern struct android_app *GetAndroidApp(void);
 #define JNI_VERSION_1_6 0x10060000
 #endif
 
-#define LOG_TAG "GOPASS_JNI"
+#define LOG_TAG "PASS_JNI"
 
 static pthread_mutex_t bridge_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int insets_status_bar = 0;
@@ -38,6 +41,42 @@ scaled_inset(int java_px, float density)
     return (int)(java_px / density + 0.5f);
 }
 
+static int
+activity_env(JNIEnv **env_out, JavaVM **jvm_out, jobject *activity_out)
+{
+    struct android_app *app = GetAndroidApp();
+    JavaVM *jvm;
+    JNIEnv *env = NULL;
+    int attached = 0;
+
+    if(env_out == NULL || jvm_out == NULL || activity_out == NULL ||
+       app == NULL || app->activity == NULL || app->activity->vm == NULL ||
+       app->activity->clazz == NULL)
+        return -1;
+
+    jvm = app->activity->vm;
+    if((*jvm)->GetEnv(jvm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+        if((*jvm)->AttachCurrentThread(jvm, &env, NULL) != JNI_OK || env == NULL)
+            return -1;
+        attached = 1;
+    }
+    *env_out = env;
+    *jvm_out = jvm;
+    *activity_out = app->activity->clazz;
+    return attached;
+}
+
+static void
+activity_env_done(JNIEnv *env, JavaVM *jvm, int attached)
+{
+    if(env != NULL && (*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+    if(attached && jvm != NULL)
+        (*jvm)->DetachCurrentThread(jvm);
+}
+
 void
 android_bridge_init(void)
 {
@@ -49,6 +88,69 @@ android_bridge_init(void)
     insets_ready = 0;
     device_density = 0.0f;
     pthread_mutex_unlock(&bridge_mutex);
+}
+
+static Color
+color_from_argb(jint argb)
+{
+    Color color;
+
+    color.a = (unsigned char)((argb >> 24) & 0xff);
+    color.r = (unsigned char)((argb >> 16) & 0xff);
+    color.g = (unsigned char)((argb >> 8) & 0xff);
+    color.b = (unsigned char)(argb & 0xff);
+    if(color.a == 0)
+        color.a = 0xff;
+    return color;
+}
+
+void
+android_bridge_apply_system_theme(void)
+{
+    JavaVM *jvm;
+    JNIEnv *env = NULL;
+    jobject activity;
+    jclass activity_class;
+    jmethodID method;
+    jintArray array;
+    jint values[9];
+    jsize len;
+    int attached;
+
+    attached = activity_env(&env, &jvm, &activity);
+    if(attached < 0)
+        return;
+
+    memset(values, 0, sizeof(values));
+    activity_class = (*env)->GetObjectClass(env, activity);
+    if(activity_class == NULL)
+        goto done;
+    method = (*env)->GetMethodID(env, activity_class, "systemThemeColors", "()[I");
+    if(method == NULL) {
+        __android_log_write(ANDROID_LOG_ERROR, LOG_TAG, "systemThemeColors not found");
+        goto done;
+    }
+    array = (jintArray)(*env)->CallObjectMethod(env, activity, method);
+    if(array == NULL)
+        goto done;
+    len = (*env)->GetArrayLength(env, array);
+    if(len < 9)
+        goto done;
+    (*env)->GetIntArrayRegion(env, array, 0, 9, values);
+    SetSystemThemePalette("Android",
+                          color_from_argb(values[1]),
+                          color_from_argb(values[2]),
+                          color_from_argb(values[3]),
+                          color_from_argb(values[4]),
+                          color_from_argb(values[5]),
+                          color_from_argb(values[6]),
+                          color_from_argb(values[7]),
+                          color_from_argb(values[8]),
+                          values[0] != 0,
+                          1);
+
+done:
+    activity_env_done(env, jvm, attached);
 }
 
 int
@@ -92,25 +194,16 @@ android_bridge_bottom_reserved(void)
 void
 android_bridge_set_soft_keyboard(int visible)
 {
-    struct android_app *app = GetAndroidApp();
     JavaVM *jvm;
     JNIEnv *env = NULL;
     jobject activity;
     jclass activity_class;
     jmethodID method;
-    int attached = 0;
+    int attached;
 
-    if(app == NULL || app->activity == NULL || app->activity->vm == NULL ||
-       app->activity->clazz == NULL)
+    attached = activity_env(&env, &jvm, &activity);
+    if(attached < 0)
         return;
-
-    jvm = app->activity->vm;
-    activity = app->activity->clazz;
-    if((*jvm)->GetEnv(jvm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
-        if((*jvm)->AttachCurrentThread(jvm, &env, NULL) != JNI_OK || env == NULL)
-            return;
-        attached = 1;
-    }
 
     activity_class = (*env)->GetObjectClass(env, activity);
     if(activity_class == NULL)
@@ -125,12 +218,190 @@ android_bridge_set_soft_keyboard(int visible)
     (*env)->CallVoidMethod(env, activity, method, visible ? JNI_TRUE : JNI_FALSE);
 
 done:
-    if((*env)->ExceptionCheck(env)) {
-        (*env)->ExceptionDescribe(env);
-        (*env)->ExceptionClear(env);
+    activity_env_done(env, jvm, attached);
+}
+
+static int
+call_boolean_method(const char *name)
+{
+    JavaVM *jvm;
+    JNIEnv *env = NULL;
+    jobject activity;
+    jclass activity_class;
+    jmethodID method;
+    int attached;
+    int result = 0;
+
+    attached = activity_env(&env, &jvm, &activity);
+    if(attached < 0)
+        return 0;
+    activity_class = (*env)->GetObjectClass(env, activity);
+    if(activity_class == NULL)
+        goto done;
+    method = (*env)->GetMethodID(env, activity_class, name, "()Z");
+    if(method == NULL)
+        goto done;
+    result = (*env)->CallBooleanMethod(env, activity, method) ? 1 : 0;
+
+done:
+    activity_env_done(env, jvm, attached);
+    return result;
+}
+
+int
+android_bridge_biometric_available(void)
+{
+    return call_boolean_method("isBiometricAvailable");
+}
+
+int
+android_bridge_master_saved(void)
+{
+    return call_boolean_method("hasStoredMasterPassword");
+}
+
+int
+android_bridge_master_biometric(void)
+{
+    return call_boolean_method("isStoredMasterBiometric");
+}
+
+void
+android_bridge_save_master(const char *master, int require_biometric)
+{
+    JavaVM *jvm;
+    JNIEnv *env = NULL;
+    jobject activity;
+    jclass activity_class;
+    jmethodID method;
+    jstring jmaster;
+    int attached;
+
+    attached = activity_env(&env, &jvm, &activity);
+    if(attached < 0)
+        return;
+    activity_class = (*env)->GetObjectClass(env, activity);
+    if(activity_class == NULL)
+        goto done;
+    method = (*env)->GetMethodID(env, activity_class, "saveMasterPassword", "(Ljava/lang/String;Z)V");
+    if(method == NULL)
+        goto done;
+    jmaster = (*env)->NewStringUTF(env, master != NULL ? master : "");
+    if(jmaster == NULL)
+        goto done;
+    (*env)->CallVoidMethod(env, activity, method, jmaster, require_biometric ? JNI_TRUE : JNI_FALSE);
+    (*env)->DeleteLocalRef(env, jmaster);
+
+done:
+    activity_env_done(env, jvm, attached);
+}
+
+static void
+call_void_method(const char *name)
+{
+    JavaVM *jvm;
+    JNIEnv *env = NULL;
+    jobject activity;
+    jclass activity_class;
+    jmethodID method;
+    int attached;
+
+    attached = activity_env(&env, &jvm, &activity);
+    if(attached < 0)
+        return;
+    activity_class = (*env)->GetObjectClass(env, activity);
+    if(activity_class == NULL)
+        goto done;
+    method = (*env)->GetMethodID(env, activity_class, name, "()V");
+    if(method == NULL)
+        goto done;
+    (*env)->CallVoidMethod(env, activity, method);
+
+done:
+    activity_env_done(env, jvm, attached);
+}
+
+void
+android_bridge_unlock_master(void)
+{
+    call_void_method("unlockMasterPassword");
+}
+
+void
+android_bridge_clear_master(void)
+{
+    call_void_method("clearMasterPassword");
+}
+
+int
+android_bridge_secure_status(void)
+{
+    JavaVM *jvm;
+    JNIEnv *env = NULL;
+    jobject activity;
+    jclass activity_class;
+    jmethodID method;
+    int attached;
+    int result = 0;
+
+    attached = activity_env(&env, &jvm, &activity);
+    if(attached < 0)
+        return 0;
+    activity_class = (*env)->GetObjectClass(env, activity);
+    if(activity_class == NULL)
+        goto done;
+    method = (*env)->GetMethodID(env, activity_class, "secureMasterStatus", "()I");
+    if(method == NULL)
+        goto done;
+    result = (int)(*env)->CallIntMethod(env, activity, method);
+
+done:
+    activity_env_done(env, jvm, attached);
+    return result;
+}
+
+int
+android_bridge_take_secure_result(char *out, int out_size)
+{
+    JavaVM *jvm;
+    JNIEnv *env = NULL;
+    jobject activity;
+    jclass activity_class;
+    jmethodID method;
+    jstring result;
+    const char *chars;
+    int attached;
+    int status = 0;
+
+    if(out != NULL && out_size > 0)
+        out[0] = '\0';
+    attached = activity_env(&env, &jvm, &activity);
+    if(attached < 0)
+        return 0;
+    activity_class = (*env)->GetObjectClass(env, activity);
+    if(activity_class == NULL)
+        goto done;
+    method = (*env)->GetMethodID(env, activity_class, "secureMasterStatus", "()I");
+    if(method == NULL)
+        goto done;
+    status = (int)(*env)->CallIntMethod(env, activity, method);
+    method = (*env)->GetMethodID(env, activity_class, "takeSecureMasterResult", "()Ljava/lang/String;");
+    if(method == NULL)
+        goto done;
+    result = (jstring)(*env)->CallObjectMethod(env, activity, method);
+    if(result == NULL)
+        goto done;
+    chars = (*env)->GetStringUTFChars(env, result, NULL);
+    if(chars != NULL) {
+        if(out != NULL && out_size > 0)
+            snprintf(out, (size_t)out_size, "%s", chars);
+        (*env)->ReleaseStringUTFChars(env, result, chars);
     }
-    if(attached)
-        (*jvm)->DetachCurrentThread(jvm);
+    (*env)->DeleteLocalRef(env, result);
+
+done:
+    activity_env_done(env, jvm, attached);
+    return status;
 }
 
 /* ---- Java -> C natives (exported JNI symbols; RegisterNatives from
@@ -198,8 +469,17 @@ Java_xyz_waozi_pass_MainActivity_nativeTextInputEnter(JNIEnv *env, jobject thiz)
 #else /* !ANDROID_BUILD */
 
 void android_bridge_init(void) {}
+void android_bridge_apply_system_theme(void) {}
 int android_bridge_top_reserved(void) { return 0; }
 int android_bridge_bottom_reserved(void) { return 0; }
 void android_bridge_set_soft_keyboard(int visible) { (void)visible; }
+int android_bridge_biometric_available(void) { return 0; }
+int android_bridge_master_saved(void) { return 0; }
+int android_bridge_master_biometric(void) { return 0; }
+void android_bridge_save_master(const char *master, int require_biometric) { (void)master; (void)require_biometric; }
+void android_bridge_unlock_master(void) {}
+void android_bridge_clear_master(void) {}
+int android_bridge_secure_status(void) { return 0; }
+int android_bridge_take_secure_result(char *out, int out_size) { if(out != NULL && out_size > 0) out[0] = '\0'; return 0; }
 
 #endif

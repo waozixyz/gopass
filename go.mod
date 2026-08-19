@@ -1,4 +1,4 @@
-module github.com/waozixyz/gopass
+module github.com/waozixyz/pass
 
 go 1.24
 

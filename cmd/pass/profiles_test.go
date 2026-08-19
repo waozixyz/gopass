@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	password "github.com/waozixyz/gopass"
+	password "github.com/waozixyz/pass"
 )
 
 // withConfig points the config loader at a temporary file for one test.

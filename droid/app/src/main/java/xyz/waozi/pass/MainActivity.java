@@ -1,9 +1,19 @@
 package xyz.waozi.pass;
 
 import android.app.NativeActivity;
+import android.app.KeyguardManager;
+import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.graphics.Insets;
+import android.hardware.biometrics.BiometricPrompt;
+import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.CancellationSignal;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.TypedValue;
 import android.view.DisplayCutout;
 import android.view.KeyEvent;
 import android.view.View;
@@ -12,11 +22,31 @@ import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 
+import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import java.security.SecureRandom;
+import java.util.concurrent.Executor;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+
 /**
  * NativeActivity glue for the kryon UI: routes soft-keyboard input and
  * window insets to the native side. Modeled on inbe's MainActivity.
  */
 public class MainActivity extends NativeActivity {
+    private static final String SECURE_PREFS = "pass_secure";
+    private static final String KEY_ALIAS = "pass_master_key";
+    private static final String PREF_CIPHERTEXT = "master_ciphertext";
+    private static final String PREF_IV = "master_iv";
+    private static final String PREF_BIOMETRIC = "master_biometric";
+    private static final int SECURE_IDLE = 0;
+    private static final int SECURE_PENDING = 1;
+    private static final int SECURE_OK = 2;
+    private static final int SECURE_ERROR = 3;
+
     static {
         // Associate libmain with this class's loader so ART can resolve the
         // native methods below (NativeActivity loads it via the boot loader).
@@ -24,6 +54,9 @@ public class MainActivity extends NativeActivity {
     }
 
     private int lastDeleteRepeatCount = -1;
+    private final Object secureLock = new Object();
+    private int secureStatus = SECURE_IDLE;
+    private String secureResult = "";
 
     private native void nativeSetInsets(int status, int nav,
         int cutoutLeft, int cutoutTop, int cutoutRight, int cutoutBottom);
@@ -36,6 +69,263 @@ public class MainActivity extends NativeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setupInsetsListener();
+    }
+
+    public int[] systemThemeColors() {
+        boolean dark = (getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        int background = resolveThemeColor(android.R.attr.windowBackground,
+                dark ? 0xFF141218 : 0xFFFFFBFE);
+        int text = resolveThemeColor(android.R.attr.textColorPrimary,
+                dark ? 0xFFE6E0E9 : 0xFF1D1B20);
+        int accent = resolveThemeColor(android.R.attr.colorAccent,
+                dark ? 0xFFD0BCFF : 0xFF6750A4);
+        int button = resolveThemeColor(android.R.attr.colorButtonNormal,
+                dark ? 0xFF4A4458 : 0xFFE7E0EC);
+        int control = resolveThemeColor(android.R.attr.colorControlNormal, text);
+        int surface = blend(background, dark ? 0xFFFFFFFF : 0xFF000000, dark ? 12 : 4);
+        int buttonHover = blend(accent, background, 35);
+
+        return new int[] {
+            dark ? 1 : 0,
+            background,
+            surface,
+            text,
+            accent,
+            button,
+            buttonHover,
+            control,
+            accent
+        };
+    }
+
+    private int resolveThemeColor(int attr, int fallback) {
+        TypedValue value = new TypedValue();
+        if (!getTheme().resolveAttribute(attr, value, true)) {
+            return fallback;
+        }
+        if (value.type >= TypedValue.TYPE_FIRST_COLOR_INT
+                && value.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+            return value.data;
+        }
+        if (value.resourceId != 0) {
+            try {
+                ColorStateList list;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    list = getResources().getColorStateList(value.resourceId, getTheme());
+                } else {
+                    list = getResources().getColorStateList(value.resourceId);
+                }
+                if (list != null) {
+                    return list.getDefaultColor();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return fallback;
+    }
+
+    private static int blend(int from, int to, int percentTo) {
+        int p = Math.max(0, Math.min(100, percentTo));
+        int a = (((from >>> 24) & 0xff) * (100 - p) + ((to >>> 24) & 0xff) * p) / 100;
+        int r = (((from >>> 16) & 0xff) * (100 - p) + ((to >>> 16) & 0xff) * p) / 100;
+        int g = (((from >>> 8) & 0xff) * (100 - p) + ((to >>> 8) & 0xff) * p) / 100;
+        int b = ((from & 0xff) * (100 - p) + (to & 0xff) * p) / 100;
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    public boolean hasStoredMasterPassword() {
+        SharedPreferences prefs = getSharedPreferences(SECURE_PREFS, MODE_PRIVATE);
+        return prefs.contains(PREF_CIPHERTEXT) && prefs.contains(PREF_IV);
+    }
+
+    public boolean isStoredMasterBiometric() {
+        return getSharedPreferences(SECURE_PREFS, MODE_PRIVATE).getBoolean(PREF_BIOMETRIC, false);
+    }
+
+    @SuppressWarnings("deprecation")
+    public boolean isBiometricAvailable() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
+        try {
+            FingerprintManager fm = (FingerprintManager)getSystemService(Context.FINGERPRINT_SERVICE);
+            if (fm != null && fm.isHardwareDetected() && fm.hasEnrolledFingerprints()) return true;
+        } catch (SecurityException ignored) {
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            KeyguardManager km = (KeyguardManager)getSystemService(Context.KEYGUARD_SERVICE);
+            return km != null && km.isDeviceSecure();
+        }
+        return false;
+    }
+
+    public int secureMasterStatus() {
+        synchronized (secureLock) {
+            return secureStatus;
+        }
+    }
+
+    public String takeSecureMasterResult() {
+        synchronized (secureLock) {
+            String value = secureResult == null ? "" : secureResult;
+            secureResult = "";
+            secureStatus = SECURE_IDLE;
+            return value;
+        }
+    }
+
+    public void saveMasterPassword(final String master, final boolean requireBiometric) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (master == null || master.length() == 0) {
+                    setSecureError("Enter a master password first");
+                    return;
+                }
+                if (requireBiometric && !isBiometricAvailable()) {
+                    setSecureError("Biometric unlock is not available");
+                    return;
+                }
+                try {
+                    byte[] iv = new byte[12];
+                    new SecureRandom().nextBytes(iv);
+                    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+                    cipher.init(Cipher.ENCRYPT_MODE, getOrCreateMasterKey(), new GCMParameterSpec(128, iv));
+                    byte[] encrypted = cipher.doFinal(master.getBytes(StandardCharsets.UTF_8));
+
+                    SharedPreferences.Editor editor = getSharedPreferences(SECURE_PREFS, MODE_PRIVATE).edit();
+                    editor.putString(PREF_IV, b64(iv));
+                    editor.putString(PREF_CIPHERTEXT, b64(encrypted));
+                    editor.putBoolean(PREF_BIOMETRIC, requireBiometric);
+                    editor.apply();
+                    setSecureOk("Master password saved");
+                } catch (Exception e) {
+                    setSecureError("Save failed: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    public void unlockMasterPassword() {
+        if (!hasStoredMasterPassword()) {
+            setSecureError("No saved master password");
+            return;
+        }
+        if (isStoredMasterBiometric()) {
+            authenticateThenDecrypt();
+            return;
+        }
+        decryptStoredMaster();
+    }
+
+    public void clearMasterPassword() {
+        getSharedPreferences(SECURE_PREFS, MODE_PRIVATE).edit().clear().apply();
+        setSecureOk("Saved master password removed");
+    }
+
+    private void authenticateThenDecrypt() {
+        if (!isBiometricAvailable()) {
+            setSecureError("Biometric unlock is not available");
+            return;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            setSecureError("Biometric prompt requires Android 9 or newer");
+            return;
+        }
+        synchronized (secureLock) {
+            secureStatus = SECURE_PENDING;
+            secureResult = "Waiting for biometric unlock";
+        }
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Executor executor = new Executor() {
+                    @Override
+                    public void execute(Runnable command) {
+                        runOnUiThread(command);
+                    }
+                };
+                BiometricPrompt prompt = new BiometricPrompt.Builder(MainActivity.this)
+                    .setTitle("Unlock master password")
+                    .setSubtitle("Use your fingerprint or device credential")
+                    .setDescription("pass will decrypt the saved master password after unlock")
+                    .setNegativeButton("Cancel", executor, (dialog, which) -> setSecureError("Unlock canceled"))
+                    .build();
+                prompt.authenticate(new CancellationSignal(), executor,
+                    new BiometricPrompt.AuthenticationCallback() {
+                        @Override
+                        public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
+                            decryptStoredMaster();
+                        }
+
+                        @Override
+                        public void onAuthenticationError(int errorCode, CharSequence errString) {
+                            setSecureError(errString == null ? "Unlock failed" : errString.toString());
+                        }
+
+                        @Override
+                        public void onAuthenticationFailed() {
+                            setSecureError("Biometric unlock failed");
+                        }
+                    });
+            }
+        });
+    }
+
+    private void decryptStoredMaster() {
+        try {
+            SharedPreferences prefs = getSharedPreferences(SECURE_PREFS, MODE_PRIVATE);
+            String ivText = prefs.getString(PREF_IV, "");
+            String encryptedText = prefs.getString(PREF_CIPHERTEXT, "");
+            if (ivText.length() == 0 || encryptedText.length() == 0) {
+                setSecureError("No saved master password");
+                return;
+            }
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateMasterKey(), new GCMParameterSpec(128, unb64(ivText)));
+            byte[] decrypted = cipher.doFinal(unb64(encryptedText));
+            setSecureOk(new String(decrypted, StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            setSecureError("Unlock failed: " + e.getMessage());
+        }
+    }
+
+    private SecretKey getOrCreateMasterKey() throws Exception {
+        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+        keyStore.load(null);
+        if (keyStore.containsAlias(KEY_ALIAS)) {
+            return (SecretKey)keyStore.getKey(KEY_ALIAS, null);
+        }
+        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
+                KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setRandomizedEncryptionRequired(true)
+            .build();
+        generator.init(spec);
+        return generator.generateKey();
+    }
+
+    private void setSecureOk(String value) {
+        synchronized (secureLock) {
+            secureStatus = SECURE_OK;
+            secureResult = value == null ? "" : value;
+        }
+    }
+
+    private void setSecureError(String value) {
+        synchronized (secureLock) {
+            secureStatus = SECURE_ERROR;
+            secureResult = value == null ? "Secure storage failed" : value;
+        }
+    }
+
+    private static String b64(byte[] data) {
+        return android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
+    }
+
+    private static byte[] unb64(String text) {
+        return android.util.Base64.decode(text, android.util.Base64.NO_WRAP);
     }
 
     public void setSoftKeyboardVisible(final boolean visible) {

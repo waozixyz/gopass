@@ -1,7 +1,7 @@
-module github.com/waozixyz/gopass/web
+module github.com/waozixyz/pass/web
 
 go 1.24
 
-require github.com/waozixyz/gopass v0.0.0
+require github.com/waozixyz/pass v0.0.0
 
-replace github.com/waozixyz/gopass => ../..
+replace github.com/waozixyz/pass => ../..

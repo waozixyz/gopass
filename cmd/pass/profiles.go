@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	password "github.com/waozixyz/gopass"
+	password "github.com/waozixyz/pass"
 )
 
 // Profile holds the saved settings for one named identity: a login plus the
@@ -30,7 +30,7 @@ type Profile struct {
 }
 
 // Config is the optional profiles file. Every field is a default that flags
-// and profile entries override; a missing file leaves gopass fully stateless.
+// and profile entries override; a missing file leaves pass fully stateless.
 type Config struct {
 	Vault      string             `json:"vault,omitempty"`
 	Copy       *bool              `json:"copy,omitempty"`
@@ -43,17 +43,17 @@ var configPath = defaultConfigPath
 
 func defaultConfigPath() string {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
-		return filepath.Join(dir, "gopass", "profiles.json")
+		return filepath.Join(dir, "pass", "profiles.json")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "gopass", "profiles.json")
+	return filepath.Join(home, ".config", "pass", "profiles.json")
 }
 
 // loadConfig reads the profiles file. A missing file is not an error: the
-// feature is simply off and gopass behaves as a plain stateless generator.
+// feature is simply off and pass behaves as a plain stateless generator.
 func loadConfig() (*Config, error) {
 	path := configPath()
 	if path == "" {
