@@ -42,7 +42,11 @@ func main() {
 	kryui.SetWindowIcon(icon)
 	kryui.UnloadImage(icon)
 	kryui.SetThemeStyle(kryui.ThemeStyleMaterial)
-	kryui.SetCurrentTheme(11, true) // Cobalt dark
+	kryui.SetCurrentTheme(11, true) // Cobalt dark (fallback palette)
+	// Follow the system palette by default; Cobalt dark is the fallback when
+	// no system theme can be read.
+	kryui.SetThemeSource(kryui.ThemeSourceSystem)
+	kryui.SetThemeMode(kryui.ThemeModeSystem)
 	kryui.EnsureUIDefaultFont()
 	// The emoji fingerprint font serves only the master-password emoji
 	// codepoints; all other glyphs keep coming from the theme font.
