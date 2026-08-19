@@ -4,6 +4,7 @@
 typedef struct PassApp PassApp;
 
 PassApp *pass_app(void);
+const int *pass_app_master_emoji_codepoints(int *count);
 
 /* Draws one frame. Surface sizes are physical pixels; dpi is the display
  * scale. top/bottom_reserved are safe-area insets in UI units (dp). */

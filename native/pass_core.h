@@ -22,6 +22,10 @@ void pass_derive_key(const char *password, size_t password_len,
                        const char *salt, size_t salt_len,
                        uint8_t out[32]);
 
+/* Computes SHA-256. Shared with UI code that must match the Go package's
+ * master-password fingerprint derivation. */
+void pass_sha256(const void *data, size_t len, uint8_t out[32]);
+
 /* Generates a LessPass-compatible password. Returns 0 on success and writes
  * the NUL-terminated password into out. Returns nonzero on invalid options
  * and writes the reason into err (English, matches the Go error strings). */

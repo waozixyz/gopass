@@ -175,6 +175,12 @@ sha256(const void *data, size_t len, uint8_t out[32])
     sha256_final(&ctx, out);
 }
 
+void
+pass_sha256(const void *data, size_t len, uint8_t out[32])
+{
+    sha256(data, len, out);
+}
+
 /* ------------------------------------------------------------------ */
 /* HMAC-SHA256                                                         */
 /* ------------------------------------------------------------------ */

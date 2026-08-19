@@ -26,11 +26,12 @@ list(FILTER KRYON_SOURCES EXCLUDE REGEX "${KRYON_DIR}/src/notification/.*")
 list(REMOVE_ITEM KRYON_SOURCES "${KRYON_DIR}/src/file_dialog/file_dialog.c")
 
 set(PASS_FONT_ASSET "vendor/kryon/fonts/noto/NotoSans-Regular.ttf")
+set(PASS_EMOJI_FONT_ASSET "gui/assets/emoji.ttf")
 set(PASS_EMBEDDED_ASSETS_C "${CMAKE_BINARY_DIR}/pass_embedded_assets.c")
 add_custom_command(
     OUTPUT "${PASS_EMBEDDED_ASSETS_C}"
-    COMMAND sh "${KRYON_DIR}/scripts/embed-assets.sh" "${PASS_EMBEDDED_ASSETS_C}" "${PASS_FONT_ASSET}"
-    DEPENDS "${KRYON_DIR}/scripts/embed-assets.sh" "${KRYON_DIR}/fonts/noto/NotoSans-Regular.ttf"
+    COMMAND sh "${KRYON_DIR}/scripts/embed-assets.sh" "${PASS_EMBEDDED_ASSETS_C}" "${PASS_FONT_ASSET}" "${PASS_EMOJI_FONT_ASSET}"
+    DEPENDS "${KRYON_DIR}/scripts/embed-assets.sh" "${KRYON_DIR}/fonts/noto/NotoSans-Regular.ttf" "${REPO_ROOT}/${PASS_EMOJI_FONT_ASSET}"
     WORKING_DIRECTORY "${REPO_ROOT}"
     VERBATIM
 )

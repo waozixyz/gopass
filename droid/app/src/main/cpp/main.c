@@ -7,6 +7,7 @@
 #include "ui_dpi.h"
 #include "ui_core.h"
 #include "ui_scaling.h"
+#include "ui_text.h"
 
 #include "android_bridge.h"
 #include "pass_app.h"
@@ -20,6 +21,7 @@
 #endif
 
 static const char *const FONT_ASSET_PATH = "vendor/kryon/fonts/noto/NotoSans-Regular.ttf";
+static const char *const EMOJI_FONT_ASSET_PATH = "gui/assets/emoji.ttf";
 
 /* Kryon's shape drawing rides on a 1x1 white texture so rectangles tint
  * cleanly on the GL ES surface (same setup inbe performs on Android). */
@@ -57,6 +59,25 @@ setup_ui_font(void)
     return 1;
 }
 
+static int
+setup_emoji_font(void)
+{
+    const EmbeddedAsset *asset = GetEmbeddedAsset(EMOJI_FONT_ASSET_PATH);
+    int codepoint_count = 0;
+    const int *codepoints = pass_app_master_emoji_codepoints(&codepoint_count);
+
+    if(asset == NULL || asset->data == NULL || asset->size == 0) {
+        TraceLog(LOG_WARNING, "PASS: missing embedded emoji font asset");
+        return 0;
+    }
+    if(!RegisterUIFixedFontSource("pass-emoji", GetEmbeddedAssetExtension(EMOJI_FONT_ASSET_PATH),
+                                  asset->data, asset->size, codepoints, codepoint_count)) {
+        TraceLog(LOG_WARNING, "PASS: RegisterUIFixedFontSource failed for emoji");
+        return 0;
+    }
+    return 1;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -84,6 +105,7 @@ main(int argc, char **argv)
     SetThemeSource(THEME_SOURCE_SYSTEM);
     SetThemeMode(THEME_MODE_SYSTEM);
     setup_ui_font();
+    setup_emoji_font();
     setup_shapes_texture();
     SetUITextInputPlatformCallback(android_bridge_set_soft_keyboard);
     SetTargetFPS(60);

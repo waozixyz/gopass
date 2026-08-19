@@ -12,6 +12,7 @@
 #include "ui_nav.h"
 #include "ui_scroll.h"
 #include "ui_scaling.h"
+#include "ui_text.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +21,7 @@
 
 #define CLIPBOARD_LIFETIME_MS 20000
 #define MAX_PROFILES 32
+#define MASTER_EMOJI_COUNT 4
 
 typedef enum {
     VIEW_GENERATE = 0,
@@ -53,6 +55,26 @@ typedef struct {
     int show_fingerprint;
     int use_biometric;
 } AppSettings;
+
+static const int master_emoji_codepoints[] = {
+    0x1F436, 0x1F431, 0x1F42D, 0x1F439, 0x1F430, 0x1F98A, 0x1F43B, 0x1F43C,
+    0x1F428, 0x1F42F, 0x1F981, 0x1F42E, 0x1F437, 0x1F438, 0x1F435, 0x1F414,
+    0x1F427, 0x1F989, 0x1F43A, 0x1F434, 0x1F984, 0x1F41D, 0x1F98B, 0x1F422,
+    0x1F34E, 0x1F34A, 0x1F34B, 0x1F349, 0x1F347, 0x1F353, 0x1F352, 0x1F351,
+    0x1F951, 0x1F33D, 0x1F355, 0x1F354, 0x1F35F, 0x1F369,
+    0x1F335, 0x1F332, 0x1F333, 0x1F334, 0x1F331, 0x1F33B, 0x1F338, 0x1F308,
+    0x2B50, 0x1F319,
+    0x1F525, 0x1F4A7, 0x26C4, 0x1F389, 0x1F3B8, 0x1F3AF, 0x1F3B2, 0x1F381,
+    0x1F680, 0x1F697, 0x2693, 0x1F3A8, 0x1F511, 0x1F4A1, 0x1F4DA, 0x1F3A7,
+};
+
+const int *
+pass_app_master_emoji_codepoints(int *count)
+{
+    if(count != NULL)
+        *count = (int)(sizeof(master_emoji_codepoints) / sizeof(master_emoji_codepoints[0]));
+    return master_emoji_codepoints;
+}
 
 static void
 field_init(Field *f, int focus_id, int capacity_codepoints)
@@ -688,18 +710,53 @@ draw_bottom_nav(PassApp *a, int view_w_px, int view_h_px, int bottom_margin_px)
     }
 }
 
-static void
-fingerprint_text(const char *master, char *out, size_t out_size)
+static size_t
+append_utf8(char *out, size_t used, size_t out_size, uint32_t codepoint)
 {
-    uint32_t h = 2166136261u;
-    const unsigned char *p = (const unsigned char *)master;
-
-    while(p != NULL && *p != '\0') {
-        h ^= *p++;
-        h *= 16777619u;
+    if(out == NULL || out_size == 0)
+        return used;
+    if(codepoint <= 0x7fu) {
+        if(used + 1 >= out_size)
+            return used;
+        out[used++] = (char)codepoint;
+    } else if(codepoint <= 0x7ffu) {
+        if(used + 2 >= out_size)
+            return used;
+        out[used++] = (char)(0xc0u | (codepoint >> 6));
+        out[used++] = (char)(0x80u | (codepoint & 0x3fu));
+    } else if(codepoint <= 0xffffu) {
+        if(used + 3 >= out_size)
+            return used;
+        out[used++] = (char)(0xe0u | (codepoint >> 12));
+        out[used++] = (char)(0x80u | ((codepoint >> 6) & 0x3fu));
+        out[used++] = (char)(0x80u | (codepoint & 0x3fu));
+    } else {
+        if(used + 4 >= out_size)
+            return used;
+        out[used++] = (char)(0xf0u | (codepoint >> 18));
+        out[used++] = (char)(0x80u | ((codepoint >> 12) & 0x3fu));
+        out[used++] = (char)(0x80u | ((codepoint >> 6) & 0x3fu));
+        out[used++] = (char)(0x80u | (codepoint & 0x3fu));
     }
-    snprintf(out, out_size, "Fingerprint %02X %02X %02X %02X",
-             (h >> 24) & 0xff, (h >> 16) & 0xff, (h >> 8) & 0xff, h & 0xff);
+    out[used] = '\0';
+    return used;
+}
+
+static void
+fingerprint_emoji(const char *master, char *out, size_t out_size)
+{
+    uint8_t sum[32];
+    size_t used = 0;
+    int table_count;
+    const int *table = pass_app_master_emoji_codepoints(&table_count);
+    int i;
+
+    if(out == NULL || out_size == 0)
+        return;
+    out[0] = '\0';
+    pass_sha256(master != NULL ? master : "", master != NULL ? strlen(master) : 0, sum);
+    for(i = 0; i < MASTER_EMOJI_COUNT && table_count > 0; i++)
+        used = append_utf8(out, used, out_size, (uint32_t)table[sum[i] % table_count]);
 }
 
 static int
@@ -711,8 +768,6 @@ draw_generate_page(PassApp *a, int cx, int cy, int inner_w, int y)
     int x = 0;
     int half_w = (inner_w - 12) / 2;
 
-    label_text_px("PASSWORD DETAILS", cx, cy + ScaleUIPx(y), 12, scheme.primary);
-    y += 20;
     label_text_px("Site", cx, cy + ScaleUIPx(y), 14, text);
     draw_field(&a->site, (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)}, 16, style);
     y += 66;
@@ -732,13 +787,16 @@ draw_generate_page(PassApp *a, int cx, int cy, int inner_w, int y)
     y += 64;
     if(a->settings.show_fingerprint && a->master.buffer[0] != '\0') {
         char fp[64];
-        fingerprint_text(a->master.buffer, fp, sizeof(fp));
-        label_text_px(fp, cx, cy + ScaleUIPx(y), 12, scheme.on_surface_variant);
-        y += 22;
+        int font_token;
+
+        fingerprint_emoji(a->master.buffer, fp, sizeof(fp));
+        font_token = PushUIFont("pass-emoji");
+        label_text_px(fp, cx, cy + ScaleUIPx(y), 20, scheme.on_surface_variant);
+        PopUIFont(font_token);
+        y += 30;
     }
 
-    label_text_px("PASSWORD RULES", cx, cy + ScaleUIPx(y), 12, scheme.primary);
-    y += 18;
+    y += 6;
     label_text_px("Length", cx, cy + ScaleUIPx(y), 14, text);
     {
         SpinboxProps props;

@@ -66,6 +66,26 @@ check_derive(int index, const char *password, const char *salt, const char *want
 }
 
 static void
+check_sha256(void)
+{
+    uint8_t out[32];
+    char hex[65];
+    int i;
+
+    pass_sha256("correct horse battery staple", strlen("correct horse battery staple"), out);
+    for(i = 0; i < 32; i++)
+        sprintf(hex + i * 2, "%02x", out[i]);
+    hex[64] = '\0';
+
+    if(strcmp(hex, "c4bbcb1fbec99d65bf59d85c8cb62ee2db963f0fe106f483d9afa73bd4e39a8a") != 0) {
+        printf("FAIL sha256: got %s\n", hex);
+        failures++;
+    } else {
+        printf("ok   sha256: %s\n", hex);
+    }
+}
+
+static void
 check_shape(void)
 {
     PassOptions options;
@@ -135,6 +155,7 @@ main(void)
         "0394a2ede332c9a13eb82e9b24631604c31df978b4e2f0fbd2c549944f9d79a5");
     check_derive(2, "", "examplealice1",
         "caa46554f5a676b76c15b368c655b0b24eaaad8595ef919999785c68e60fd5f5");
+    check_sha256();
 
     memset(&defaults, 0, sizeof(defaults));
     defaults.length = 16;

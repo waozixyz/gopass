@@ -24,7 +24,6 @@ import android.content.Context;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
-import java.security.SecureRandom;
 import java.util.concurrent.Executor;
 
 import javax.crypto.Cipher;
@@ -68,23 +67,21 @@ public class MainActivity extends NativeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        applySystemBars();
         setupInsetsListener();
     }
 
     public int[] systemThemeColors() {
         boolean dark = (getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        int background = resolveThemeColor(android.R.attr.windowBackground,
-                dark ? 0xFF141218 : 0xFFFFFBFE);
-        int text = resolveThemeColor(android.R.attr.textColorPrimary,
-                dark ? 0xFFE6E0E9 : 0xFF1D1B20);
+        int background = dark ? 0xFF141218 : 0xFFFFFBFE;
+        int surface = dark ? 0xFF211F26 : 0xFFF7F2FA;
+        int text = dark ? 0xFFE6E0E9 : 0xFF1D1B20;
         int accent = resolveThemeColor(android.R.attr.colorAccent,
                 dark ? 0xFFD0BCFF : 0xFF6750A4);
-        int button = resolveThemeColor(android.R.attr.colorButtonNormal,
-                dark ? 0xFF4A4458 : 0xFFE7E0EC);
-        int control = resolveThemeColor(android.R.attr.colorControlNormal, text);
-        int surface = blend(background, dark ? 0xFFFFFFFF : 0xFF000000, dark ? 12 : 4);
-        int buttonHover = blend(accent, background, 35);
+        int control = dark ? 0xFFE6E0E9 : 0xFF1D1B20;
+        int button = blend(accent, background, dark ? 65 : 80);
+        int buttonHover = blend(accent, background, dark ? 45 : 60);
 
         return new int[] {
             dark ? 1 : 0,
@@ -97,6 +94,28 @@ public class MainActivity extends NativeActivity {
             control,
             accent
         };
+    }
+
+    private void applySystemBars() {
+        int[] colors = systemThemeColors();
+        boolean dark = colors[0] != 0;
+        getWindow().setStatusBarColor(colors[1]);
+        getWindow().setNavigationBarColor(colors[1]);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            int flags = getWindow().getDecorView().getSystemUiVisibility();
+            if (!dark) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                }
+            } else {
+                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                }
+            }
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        }
     }
 
     private int resolveThemeColor(int attr, int fallback) {
@@ -186,11 +205,14 @@ public class MainActivity extends NativeActivity {
                     return;
                 }
                 try {
-                    byte[] iv = new byte[12];
-                    new SecureRandom().nextBytes(iv);
                     Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                    cipher.init(Cipher.ENCRYPT_MODE, getOrCreateMasterKey(), new GCMParameterSpec(128, iv));
+                    cipher.init(Cipher.ENCRYPT_MODE, getOrCreateMasterKey());
                     byte[] encrypted = cipher.doFinal(master.getBytes(StandardCharsets.UTF_8));
+                    byte[] iv = cipher.getIV();
+                    if (iv == null || iv.length == 0) {
+                        setSecureError("Save failed: missing encryption IV");
+                        return;
+                    }
 
                     SharedPreferences.Editor editor = getSharedPreferences(SECURE_PREFS, MODE_PRIVATE).edit();
                     editor.putString(PREF_IV, b64(iv));
