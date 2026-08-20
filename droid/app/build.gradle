@@ -23,12 +23,22 @@ android {
 
     def releasePassword = project.findProperty('keystore.password') ?: ""
 
+    def releaseKeystorePath = getKeystorePath()
+    def releaseKeystore = releaseKeystorePath ? file(releaseKeystorePath) : null
+    // Sign release builds only when a keystore is actually available: CI and
+    // local release builds pass -Pkeystore.* properties, while clean checkouts
+    // (for example an F-Droid builder) produce an unsigned APK instead.
+    def signRelease = !project.hasProperty('fDroidBuild') \
+        && releaseKeystore != null && releaseKeystore.exists()
+
     signingConfigs {
         release {
-            storeFile getKeystorePath() ? file(getKeystorePath()) : null
-            storePassword releasePassword
-            keyAlias getKeystoreAlias()
-            keyPassword releasePassword
+            if (signRelease) {
+                storeFile releaseKeystore
+                storePassword releasePassword
+                keyAlias getKeystoreAlias()
+                keyPassword releasePassword
+            }
         }
     }
 
@@ -48,7 +58,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig project.hasProperty('fDroidBuild') ? null : signingConfigs.release
+            signingConfig signRelease ? signingConfigs.release : null
             minifyEnabled false
         }
         debug {
