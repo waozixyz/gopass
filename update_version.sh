@@ -39,3 +39,38 @@ grep -F "const Version = \"$release_version\"" version.go >/dev/null
 grep -F "versionName \"$release_version\"" "$gradle_file" >/dev/null
 grep -E "^[[:space:]]*versionCode $release_code$" "$gradle_file" >/dev/null
 grep -F "<release version=\"$release_version\" date=\"$release_date\"" "$metainfo" >/dev/null
+
+# Generate the Fastlane changelog for the Android versionCode being built.
+# Fastlane file names are versionCode values, not changelog positions, and
+# store listings cap changelogs at 500 characters.
+changelog_dir=fastlane/metadata/android/en-US/changelogs
+mkdir -p "$changelog_dir"
+changelog=$(awk -v ver="$release_version" '
+	BEGIN { in_section = 0; buf = "" }
+	/^## \[/ {
+		if (in_section) exit
+		if (index($0, "[" ver "]") > 0) {
+			in_section = 1
+			next
+		}
+	}
+	in_section {
+		if ($0 == "") next
+		if (/^- /) {
+			if (buf != "") print buf
+			buf = $0
+			next
+		}
+		if (buf != "") {
+			line = $0
+			sub(/^[ \t]+/, "", line)
+			buf = buf " " line
+		}
+	}
+	END { if (buf != "") print buf }
+' CHANGELOG.md)
+if [ -z "$changelog" ]; then
+	echo "No changelog bullets found for $release_version in CHANGELOG.md" >&2
+	exit 1
+fi
+printf '%s\n' "$changelog" | head -c 500 > "$changelog_dir/$release_code.txt"

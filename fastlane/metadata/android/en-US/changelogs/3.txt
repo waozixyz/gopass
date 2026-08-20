@@ -1,0 +1,2 @@
+- Install pass on Android: a signed APK is now downloadable from pass.waozi.xyz alongside the desktop, terminal, and browser downloads.
+- Fix the Android master-password fingerprint and secure storage so the stored master password unlocks reliably across launches.

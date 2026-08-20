@@ -1,0 +1,1 @@
+Initial release: deterministic, LessPass-compatible password generation with configurable length, counter, character classes, and excluded characters. Everything is computed locally; nothing is stored or uploaded.

@@ -1,0 +1,1 @@
+New clipboard handling, vault support, and named profiles in the CLI, plus self-update checks in the desktop app. Android keeps the same local, stateless generator.
