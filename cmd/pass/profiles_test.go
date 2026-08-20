@@ -32,7 +32,6 @@ func withVaultPassphrase(t *testing.T, passphrase string) {
 
 func TestRunWithProfileSettings(t *testing.T) {
 	withConfig(t, `{
-		"vault": "/nonexistent/vault",
 		"copy": true,
 		"clear_after": "90s",
 		"profiles": {
@@ -42,6 +41,29 @@ func TestRunWithProfileSettings(t *testing.T) {
 	t.Setenv(environmentVariable, "correct horse battery staple")
 	var output, diagnostics bytes.Buffer
 	err := run([]string{"-P", "w", "--no-copy", "example.com"}, &output, &diagnostics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := password.Generate("example.com", "alice", "correct horse battery staple", password.Options{
+		Length: 23, Counter: 9, Lowercase: true, Uppercase: true, Digits: true, Symbols: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(output.String()); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
+func TestRunWithProfileShorthand(t *testing.T) {
+	withConfig(t, `{
+		"profiles": {
+			"w": {"login": "alice", "counter": 9, "length": 23, "symbols": false}
+		}
+	}`)
+	t.Setenv(environmentVariable, "correct horse battery staple")
+	var output, diagnostics bytes.Buffer
+	err := run([]string{"w", "example.com", "--no-copy"}, &output, &diagnostics)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,9 +180,10 @@ func TestConfigVaultIsUsedForProfile(t *testing.T) {
 
 	withConfig(t, `{"vault": "`+vaultFile+`", "profiles": {"w": {"login": "alice"}}}`)
 	withVaultPassphrase(t, "masterpw")
+	t.Setenv(environmentVariable, "environment-must-be-ignored")
 
 	var output, diagnostics bytes.Buffer
-	if err := run([]string{"-P", "w", "--no-copy", "example.com"}, &output, &diagnostics); err != nil {
+	if err := run([]string{"w", "example.com", "--no-copy"}, &output, &diagnostics); err != nil {
 		t.Fatal(err)
 	}
 	want, err := password.Generate("example.com", "alice", "cfg-secret", password.DefaultOptions())

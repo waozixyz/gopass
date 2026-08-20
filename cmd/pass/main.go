@@ -123,6 +123,14 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 
+	positional := flags.Args()
+	if profileName == "" && len(positional) == 2 && config != nil {
+		if _, ok := config.Profiles[positional[0]]; ok {
+			profileName = positional[0]
+			positional = positional[1:]
+		}
+	}
+
 	var profile Profile
 	if profileName != "" {
 		if config == nil {
@@ -139,7 +147,6 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 		profile.apply(&options, explicit)
 	}
 
-	positional := flags.Args()
 	if profileName != "" {
 		if len(positional) != 1 {
 			printHelp(stderr)
@@ -160,13 +167,12 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 		login = positional[1]
 	}
 
-	// A vault from the configuration is the least authoritative master
-	// password source: anything the user spells out for this invocation
-	// (--vault, the environment, --prompt, a positional password) wins.
+	// Explicit command-line password sources win. A configured vault beats
+	// LESSPASS_MASTER_PASSWORD because profiles are meant to be complete
+	// saved identities, including the master source.
 	vaultPath := vaultFlag
 	if vaultPath == "" {
-		_, envSet := os.LookupEnv(environmentVariable)
-		if !envSet && !forcePrompt && len(positional) < 3 {
+		if !forcePrompt && len(positional) < 3 {
 			switch {
 			case profile.Vault != "":
 				vaultPath = expandHome(profile.Vault)
@@ -283,13 +289,14 @@ func masterPassword(positional []string, forcePrompt bool, vaultPath string) (st
 
 func printHelp(output io.Writer) {
 	fmt.Fprintln(output, `Usage: pass [OPTIONS] SITE LOGIN [MASTER_PASSWORD]
+       pass [OPTIONS] PROFILE SITE
 
 Derive a site-specific password. If MASTER_PASSWORD is omitted, pass reads
 LESSPASS_MASTER_PASSWORD or asks for it on the controlling terminal. With
 --vault it instead decrypts an OpenSSL-encrypted vault and uses its contents
-as the master password. With --profile, a named profile from the
-configuration file supplies the login and default settings and only SITE is
-passed on the command line.
+as the master password. A named profile from the configuration file can be
+used either as "pass PROFILE SITE" or with --profile; it supplies the login
+and default settings.
 
 Options:
   -L, --length N          password length (default 16)

@@ -1,4 +1,4 @@
-.PHONY: all cli gui native run test native-test web site install-gui uninstall-gui package-deb package-appimage android-debug
+.PHONY: all cli gui native run test native-test web site install install-cli uninstall-cli install-gui uninstall-gui package-deb package-appimage android-debug
 
 BIN_DIR ?= $(HOME)/bin
 DATA_DIR ?= $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)
@@ -23,9 +23,18 @@ native: all
 run: gui
 	./build/pass-gui
 
+install: install-cli install-gui
+
+install-cli: cli
+	mkdir -p $(BIN_DIR)
+	install -m 0755 pass $(BIN_DIR)/pass
+
+uninstall-cli:
+	rm -f $(BIN_DIR)/pass
+
 install-gui: gui
 	mkdir -p $(BIN_DIR) $(DATA_DIR)/applications $(DATA_DIR)/icons/hicolor/512x512/apps
-	cp build/pass-gui $(BIN_DIR)/pass-gui
+	install -m 0755 build/pass-gui $(BIN_DIR)/pass-gui
 	cp packaging/linux/xyz.waozi.pass.desktop $(DATA_DIR)/applications/xyz.waozi.pass.desktop
 	cp assets/app/icon.png $(DATA_DIR)/icons/hicolor/512x512/apps/pass.png
 
