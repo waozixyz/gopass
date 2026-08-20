@@ -93,3 +93,49 @@ jobs:
           name: pass-gui-linux-${{ matrix.arch }}
           path: build/pass-gui
           if-no-files-found: error
+
+  build-android:
+    name: Android debug build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: guard-submodule-urls
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Cache Android SDK packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_HOME }}/platforms/android-36
+            ${{ env.ANDROID_HOME }}/build-tools/34.0.0
+            ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+            ${{ env.ANDROID_HOME }}/cmake/3.22.1
+          key: android-sdk-${{ runner.os }}-${{ runner.arch }}-api36-bt34-ndk28-cmake322
+          restore-keys: |
+            android-sdk-${{ runner.os }}-${{ runner.arch }}-
+      - name: Cache Android native build
+        uses: actions/cache@v4
+        with:
+          path: |
+            droid/app/.cxx
+            droid/app/build/intermediates/cxx
+          key: android-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('droid/app/src/main/cpp/CMakeLists.txt', 'droid/app/build.gradle', 'native/*.c', 'droid/app/src/main/cpp/*.c', 'vendor/kryon/src/**/*.c', 'vendor/kryon/include/**/*.h', 'vendor/kryon/vendor/raylib/src/**') }}
+          restore-keys: |
+            android-native-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install Android SDK components
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;34.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Build debug APK
+        run: |
+          set -euo pipefail
+          chmod +x droid/gradlew
+          make android-debug
