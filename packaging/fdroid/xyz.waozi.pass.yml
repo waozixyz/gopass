@@ -33,13 +33,24 @@ RepoType: git
 Repo: https://github.com/waozixyz/pass.git
 
 Builds:
+  # NB: the v0.2.2 tag does not survive fdroidserver's signing-config
+  # stripping (build.gradle there references signingConfigs.release in
+  # buildTypes); b4be990 restructures the signing block and builds clean.
+  # Point at the v0.2.3 tag once that release is cut.
   - versionName: 0.2.2
     versionCode: 3
-    commit: v0.2.2
+    commit: b4be990
     subdir: droid
     submodules: true
     gradle:
       - yes
+    scandelete:
+      - vendor/kryon/vendor/raylib/examples/others/external/lib/libglfw3.a
+      - vendor/kryon/vendor/clay/examples/clay-official-website/build/clay/index.wasm
+      - vendor/kryon/vendor/clay/renderers/web/clay.wasm
+      - vendor/kryon/vendor/clay/bindings/odin/clay-odin/macos/clay.a
+      - vendor/kryon/vendor/clay/bindings/odin/clay-odin/macos-arm64/clay.a
+      - vendor/kryon/vendor/clay/bindings/odin/clay-odin/linux/clay.a
     output: app/build/outputs/apk/release/app-release-unsigned.apk
     ndk: 28.2.13676358
 
