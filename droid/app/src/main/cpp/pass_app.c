@@ -936,7 +936,10 @@ draw_settings_page(PassApp *a, int cx, int cy, int inner_w, int y)
     checkbox(cx, cy + ScaleUIPx(y), "Require biometric unlock", &a->settings.use_biometric);
     y += 42;
     if(!android_bridge_biometric_available())
-        label_text_px("Biometric unlock is not available on this device", cx, cy + ScaleUIPx(y), 12, scheme.on_surface_variant);
+        label_text_px(android_bridge_biometric_setup_required()
+                          ? "Set up Android screen lock and fingerprint first"
+                          : "Biometric unlock is not available on this device",
+                      cx, cy + ScaleUIPx(y), 12, scheme.on_surface_variant);
     else if(android_bridge_master_saved())
         label_text_px(android_bridge_master_biometric() ? "Saved master uses biometric unlock" : "Saved master unlocks without biometric",
                       cx, cy + ScaleUIPx(y), 12, scheme.on_surface_variant);

@@ -170,11 +170,27 @@ public class MainActivity extends NativeActivity {
             if (fm != null && fm.isHardwareDetected() && fm.hasEnrolledFingerprints()) return true;
         } catch (SecurityException ignored) {
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            KeyguardManager km = (KeyguardManager)getSystemService(Context.KEYGUARD_SERVICE);
-            return km != null && km.isDeviceSecure();
-        }
         return false;
+    }
+
+    @SuppressWarnings("deprecation")
+    public boolean isBiometricSetupRequired() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
+        try {
+            FingerprintManager fm = (FingerprintManager)getSystemService(Context.FINGERPRINT_SERVICE);
+            if (fm == null || !fm.isHardwareDetected()) return false;
+            KeyguardManager km = (KeyguardManager)getSystemService(Context.KEYGUARD_SERVICE);
+            return !fm.hasEnrolledFingerprints() || km == null || !km.isDeviceSecure();
+        } catch (SecurityException ignored) {
+            return false;
+        }
+    }
+
+    private String biometricUnavailableMessage() {
+        if (isBiometricSetupRequired()) {
+            return "Set up Android screen lock and fingerprint first";
+        }
+        return "Biometric unlock is not available on this device";
     }
 
     public int secureMasterStatus() {
@@ -201,7 +217,7 @@ public class MainActivity extends NativeActivity {
                     return;
                 }
                 if (requireBiometric && !isBiometricAvailable()) {
-                    setSecureError("Biometric unlock is not available");
+                    setSecureError(biometricUnavailableMessage());
                     return;
                 }
                 try {
@@ -246,7 +262,7 @@ public class MainActivity extends NativeActivity {
 
     private void authenticateThenDecrypt() {
         if (!isBiometricAvailable()) {
-            setSecureError("Biometric unlock is not available");
+            setSecureError(biometricUnavailableMessage());
             return;
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {

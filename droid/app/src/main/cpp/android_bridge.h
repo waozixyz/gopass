@@ -19,6 +19,7 @@ int android_bridge_bottom_reserved(void);
 void android_bridge_set_soft_keyboard(int visible);
 
 int android_bridge_biometric_available(void);
+int android_bridge_biometric_setup_required(void);
 int android_bridge_master_saved(void);
 int android_bridge_master_biometric(void);
 void android_bridge_save_master(const char *master, int require_biometric);

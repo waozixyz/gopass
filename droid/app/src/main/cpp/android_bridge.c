@@ -255,6 +255,12 @@ android_bridge_biometric_available(void)
 }
 
 int
+android_bridge_biometric_setup_required(void)
+{
+    return call_boolean_method("isBiometricSetupRequired");
+}
+
+int
 android_bridge_master_saved(void)
 {
     return call_boolean_method("hasStoredMasterPassword");
@@ -474,6 +480,7 @@ int android_bridge_top_reserved(void) { return 0; }
 int android_bridge_bottom_reserved(void) { return 0; }
 void android_bridge_set_soft_keyboard(int visible) { (void)visible; }
 int android_bridge_biometric_available(void) { return 0; }
+int android_bridge_biometric_setup_required(void) { return 0; }
 int android_bridge_master_saved(void) { return 0; }
 int android_bridge_master_biometric(void) { return 0; }
 void android_bridge_save_master(const char *master, int require_biometric) { (void)master; (void)require_biometric; }
