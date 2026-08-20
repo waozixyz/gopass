@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2] - 2026-08-20
+
+- Install pass on Android: a signed APK is now downloadable from
+  pass.waozi.xyz alongside the desktop, terminal, and browser downloads.
+- Fix the Android master-password fingerprint and secure storage so the
+  stored master password unlocks reliably across launches.
+
 ## [0.2.1] - 2026-08-19
 
 - The desktop GUI now checks for new releases and can update itself: AppImage
