@@ -1,0 +1,49 @@
+# fdroiddata metadata draft for the F-Droid inclusion request.
+# Submit as a merge request to https://gitlab.com/fdroid/fdroiddata
+# (metadata/xyz.waozi.pass.yml). Keep in sync with each release.
+Categories:
+  - Security
+License: BSD-3-Clause
+AuthorName: Waozi
+WebSite: https://pass.waozi.xyz
+SourceCode: https://github.com/waozixyz/pass
+IssueTracker: https://github.com/waozixyz/pass/issues
+Changelog: https://github.com/waozixyz/pass/blob/master/CHANGELOG.md
+
+AutoName: pass
+Summary: Deterministic password generator
+
+Description: |-
+  pass derives strong, repeatable passwords on your device. The same site,
+  login, master password, and settings always produce the same result, so
+  there is no password database to back up, sync, or lose.
+
+  Everything is computed locally. The app makes no network requests, keeps no
+  accounts, and tracks nothing.
+
+  * Deterministic, LessPass-compatible password generation
+  * Configurable length, counter, character classes, and excluded characters
+  * Optional fingerprint unlock with the master password held in secure storage
+  * No analytics, no tracking, no network access
+
+  pass is an independent implementation of the LessPass algorithm and is not
+  affiliated with or endorsed by the LessPass project.
+
+RepoType: git
+Repo: https://github.com/waozixyz/pass.git
+
+Builds:
+  - versionName: 0.2.2
+    versionCode: 3
+    commit: v0.2.2
+    subdir: droid
+    submodules: true
+    gradle:
+      - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+    ndk: 28.2.13676358
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+CurrentVersion: 0.2.2
+CurrentVersionCode: 3
