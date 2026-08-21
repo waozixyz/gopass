@@ -212,13 +212,6 @@ jobs:
           else
             echo "released=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Create release tag
-        if: steps.version.outputs.released == 'true'
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
       - name: Generate Update Appcast
         if: steps.version.outputs.released == 'true'
         run: |
@@ -256,6 +249,13 @@ jobs:
             --changelog CHANGELOG.md \
             --out build/artifacts/appcast.json \
             "${channels[@]}"
+      - name: Create release tag
+        if: steps.version.outputs.released == 'true'
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
       - name: Publish GitHub release
         if: steps.version.outputs.released == 'true'
         uses: softprops/action-gh-release@v2
