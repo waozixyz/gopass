@@ -7,7 +7,14 @@ goroot=$(go env GOROOT)
 
 rm -rf "$out_dir"
 mkdir -p "$out_dir/app"
-cp "$root_dir/web/site/index.html" "$out_dir/index.html"
+# Versioned asset names (AppImage, .deb) are templated into index.html from
+# version.go so the site always links the current release.
+version=$(sed -n 's/^const Version = "\([^"]*\)"$/\1/p' "$root_dir/version.go")
+if [ -z "$version" ]; then
+	echo "Could not read the version from version.go" >&2
+	exit 1
+fi
+sed "s/\${version}/$version/g" "$root_dir/web/site/index.html" > "$out_dir/index.html"
 cp "$root_dir/web/site/styles.css" "$out_dir/styles.css"
 cp "$root_dir/web/site/home.js" "$out_dir/home.js"
 cp "$root_dir/web/site/app/index.html" "$out_dir/app/index.html"
