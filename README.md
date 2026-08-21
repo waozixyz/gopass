@@ -109,6 +109,15 @@ make gui
 ./build/pass-gui
 ```
 
+## Android
+
+The Android app runs on Android 5.0 (API 21) and newer. Install the signed
+APK (`pass-android.apk`) from [pass.waozi.xyz](https://pass.waozi.xyz/#downloads)
+or the [releases page](https://github.com/waozixyz/pass/releases/latest). It
+uses the same generation algorithm as the desktop app, computes everything
+locally, and declares no Internet permission at all — the only permissions it
+requests are for the optional fingerprint unlock.
+
 ## Library
 
 ```go
