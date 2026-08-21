@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3] - 2026-08-21
+
+- Verify every download: releases now ship a SHA256SUMS file covering the
+  command-line, desktop, Android, and browser downloads.
+- The Android app now builds entirely from source with no developer signing
+  key, clearing the way for F-Droid distribution.
+
 ## [0.2.2] - 2026-08-20
 
 - Install pass on Android: a signed APK is now downloadable from
