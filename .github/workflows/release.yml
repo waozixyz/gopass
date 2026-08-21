@@ -249,6 +249,13 @@ jobs:
             --changelog CHANGELOG.md \
             --out build/artifacts/appcast.json \
             "${channels[@]}"
+      - name: Publish checksums
+        if: steps.version.outputs.released == 'true'
+        run: |
+          set -euo pipefail
+          cd build/artifacts
+          # The glob expands before the redirect creates SHA256SUMS itself.
+          sha256sum -- * > SHA256SUMS
       - name: Create release tag
         if: steps.version.outputs.released == 'true'
         run: |
