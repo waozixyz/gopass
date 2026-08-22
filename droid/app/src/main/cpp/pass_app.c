@@ -624,11 +624,11 @@ poll_secure_result(PassApp *a)
     memset(result, 0, sizeof(result));
 }
 
-static UITextInputStyle
+static TextInputStyle
 input_style(void)
 {
     UIMaterialScheme s = GetUIMaterialScheme();
-    UITextInputStyle style;
+    TextInputStyle style;
 
     memset(&style, 0, sizeof(style));
     style.background = s.surface_container;
@@ -643,7 +643,7 @@ input_style(void)
 }
 
 static int
-draw_field(Field *f, Rectangle bounds, int font, UITextInputStyle style)
+draw_field(Field *f, Rectangle bounds, int font, TextInputStyle style)
 {
     TextFieldProps props;
 
@@ -659,7 +659,7 @@ draw_field(Field *f, Rectangle bounds, int font, UITextInputStyle style)
     props.style = style;
     props.commit_pressed = &f->commit;
     props.secure = f->secure;
-    return DrawUITextField(props);
+    return TextField(props);
 }
 
 static void
@@ -670,11 +670,39 @@ keep_focused_field_visible(UIScrollArea area, Field *f, Rectangle bounds)
 }
 
 static int
-button(int x, int y, int w, int h, const char *label, UIButtonStyle style, int disabled)
+button(int x, int y, int w, int h, const char *label, ButtonStyle style, int disabled)
 {
-    int hover = 0;
+    UIMaterialScheme scheme = GetUIMaterialScheme();
+    Color bg = scheme.primary;
+    Color hover_bg = scheme.primary;
+    Color text = scheme.on_primary;
 
-    return DrawUIGenericButton(x, y, w, h, label, style, disabled, &hover);
+    if(style == ButtonStyleSecondary) {
+        bg = scheme.surface_variant;
+        hover_bg = scheme.surface_variant;
+        text = scheme.on_surface_variant;
+    } else if(style == ButtonStyleDanger) {
+        bg = scheme.error;
+        hover_bg = scheme.error;
+        text = scheme.on_error;
+    }
+    if(disabled) {
+        bg = scheme.disabled_container;
+        hover_bg = scheme.disabled_container;
+        text = scheme.disabled_content;
+    }
+
+    return ButtonNode((ButtonSpec){
+        .bounds = (Rectangle){(float)x, (float)y, (float)w, (float)h},
+        .label = label,
+        .font = GetUISmallFontSize(),
+        .disabled = disabled,
+        .background = bg,
+        .hover_background = hover_bg,
+        .text = text,
+        .border = LightenUIColor(bg, 32),
+        .radius = 0.08f
+    });
 }
 
 static int
@@ -719,7 +747,7 @@ fingerprint_button(PassApp *a, int x, int y, int size, int disabled)
     DrawRectangleRounded(bounds, 0.18f, 10, background);
     DrawRectangleRoundedLinesEx(bounds, 0.18f, 10, 1.0f, border);
 
-    clicked = DrawUIIconButton((IconButtonProps){
+    clicked = IconButton((IconButtonProps){
         .bounds = bounds,
         .icon = a->icons[UI_ICON_TYPE_FINGERPRINT],
         .icon_size = size - ScaleUIPx(16),
@@ -746,7 +774,7 @@ fingerprint_button(PassApp *a, int x, int y, int size, int disabled)
 static void
 checkbox(int x, int y, const char *label, int *value)
 {
-    DrawUICheckboxToggle(x, y, label, value);
+    Checkbox((int)(Key(label) & 0x7fffffff), x, y, label, value);
 }
 
 static Rectangle
@@ -807,7 +835,7 @@ draw_wide(PassApp *a, int width, int height, int top_reserved)
 {
     UIMaterialScheme scheme = GetUIMaterialScheme();
     Color text = GetThemeText();
-    UITextInputStyle style = input_style();
+    TextInputStyle style = input_style();
     int content_w = width - 64;
     int x, y;
 
@@ -840,7 +868,7 @@ draw_wide(PassApp *a, int width, int height, int top_reserved)
             fingerprint_button(a, ScaleUIPx(x + content_w - 158), ScaleUIPx(y + 24), ScaleUIPx(38), fp_disabled);
     }
     if(button(ScaleUIPx(x + content_w - 112), ScaleUIPx(y + 24), ScaleUIPx(88), ScaleUIPx(38),
-              a->reveal ? "Hide" : "Reveal", UI_BUTTON_STYLE_SECONDARY, 0))
+              a->reveal ? "Hide" : "Reveal", ButtonStyleSecondary, 0))
         a->reveal = !a->reveal;
     y += 76;
 
@@ -883,15 +911,15 @@ draw_wide(PassApp *a, int width, int height, int top_reserved)
     y += 58;
 
     if(button(ScaleUIPx(x + 24), ScaleUIPx(y), ScaleUIPx(150), ScaleUIPx(42),
-              "Generate", UI_BUTTON_STYLE_PRIMARY, 0))
+              "Generate", ButtonStylePrimary, 0))
         generate(a);
     if(button(ScaleUIPx(x + 190), ScaleUIPx(y), ScaleUIPx(150), ScaleUIPx(42),
-              "Copy for 20s", UI_BUTTON_STYLE_SECONDARY, a->generated[0] == '\0')) {
+              "Copy for 20s", ButtonStyleSecondary, a->generated[0] == '\0')) {
         clipboard_copy(a, a->generated);
         snprintf(a->message, sizeof(a->message), "%s", "Copied; clipboard clears in 20 seconds");
     }
     if(button(ScaleUIPx(x + 356), ScaleUIPx(y), ScaleUIPx(120), ScaleUIPx(42),
-              "Clear", UI_BUTTON_STYLE_SECONDARY, 0)) {
+              "Clear", ButtonStyleSecondary, 0)) {
         field_clear(&a->master);
         a->master_expires_ms = 0;
         clear_generated(a);
@@ -915,16 +943,16 @@ draw_wide(PassApp *a, int width, int height, int top_reserved)
 static void
 draw_bottom_nav(PassApp *a, int view_w_px, int view_h_px, int bottom_margin_px)
 {
-    UIBottomNavItem items[3];
-    UIBottomNavResult result;
+    BottomNavItem items[3];
+    BottomNavResult result;
 
     if(bottom_margin_px > 0)
         DrawRectangle(0, view_h_px - bottom_margin_px, view_w_px, bottom_margin_px, BLACK);
 
     memset(items, 0, sizeof(items));
-    items[0] = (UIBottomNavItem){VIEW_GENERATE, "Generate", a->icons[UI_ICON_TYPE_PLAY], a->view == VIEW_GENERATE, 0};
-    items[1] = (UIBottomNavItem){VIEW_PROFILES, "Profiles", a->icons[UI_ICON_TYPE_SAVE], a->view == VIEW_PROFILES, 0};
-    items[2] = (UIBottomNavItem){VIEW_SETTINGS, "Settings", a->icons[UI_ICON_TYPE_GEAR], a->view == VIEW_SETTINGS, 0};
+    items[0] = (BottomNavItem){VIEW_GENERATE, "Generate", a->icons[UI_ICON_TYPE_PLAY], a->view == VIEW_GENERATE, 0};
+    items[1] = (BottomNavItem){VIEW_PROFILES, "Profiles", a->icons[UI_ICON_TYPE_SAVE], a->view == VIEW_PROFILES, 0};
+    items[2] = (BottomNavItem){VIEW_SETTINGS, "Settings", a->icons[UI_ICON_TYPE_GEAR], a->view == VIEW_SETTINGS, 0};
 
     result = BottomNav((BottomNavProps){
         .view_width = view_w_px,
@@ -1010,7 +1038,7 @@ draw_generate_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
 {
     UIMaterialScheme scheme = GetUIMaterialScheme();
     Color text = GetThemeText();
-    UITextInputStyle style = input_style();
+    TextInputStyle style = input_style();
     int x = 0;
     int half_w = (inner_w - 12) / 2;
 
@@ -1042,7 +1070,7 @@ draw_generate_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
         if(fp)
             fingerprint_button(a, cx + ScaleUIPx(field_w + 8), cy + ScaleUIPx(y + 22), ScaleUIPx(42), fp_disabled);
         if(button(cx + ScaleUIPx(field_w + (fp ? 58 : 8)), cy + ScaleUIPx(y + 22), ScaleUIPx(72), ScaleUIPx(38),
-                  a->reveal ? "Hide" : "Reveal", UI_BUTTON_STYLE_SECONDARY, 0))
+                  a->reveal ? "Hide" : "Reveal", ButtonStyleSecondary, 0))
             a->reveal = !a->reveal;
     }
     y += 64;
@@ -1090,14 +1118,14 @@ draw_generate_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
     checkbox(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), "Symbols", &a->symbols);
     y += 56;
 
-    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Generate", UI_BUTTON_STYLE_PRIMARY, 0))
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Generate", ButtonStylePrimary, 0))
         generate(a);
     y += 50;
-    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Copy", UI_BUTTON_STYLE_SECONDARY, a->generated[0] == '\0')) {
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Copy", ButtonStyleSecondary, a->generated[0] == '\0')) {
         clipboard_copy_for(a, a->generated, a->settings.clear_after_seconds);
         snprintf(a->message, sizeof(a->message), a->settings.clear_after_seconds > 0 ? "Copied for %ds" : "Copied", a->settings.clear_after_seconds);
     }
-    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Clear", UI_BUTTON_STYLE_SECONDARY, 0)) {
+    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Clear", ButtonStyleSecondary, 0)) {
         field_clear(&a->master);
         a->master_expires_ms = 0;
         clear_generated(a);
@@ -1107,7 +1135,7 @@ draw_generate_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
 
     DrawRectangleRounded((Rectangle){(float)cx, (float)(cy + ScaleUIPx(y)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(84)}, 0.08f, 10, scheme.surface_container);
     if(a->generated[0] != '\0')
-        DrawUITextInRect(a->generated, (Rectangle){(float)(cx + ScaleUIPx(x + 14)), (float)(cy + ScaleUIPx(y + 8)), (float)ScaleUIPx(inner_w - 28), (float)ScaleUIPx(42)}, 16, text);
+        TextInRect(a->generated, (Rectangle){(float)(cx + ScaleUIPx(x + 14)), (float)(cy + ScaleUIPx(y + 8)), (float)ScaleUIPx(inner_w - 28), (float)ScaleUIPx(42)}, 16, text);
     else
         label_text_px("Your generated password appears here", cx + ScaleUIPx(14), cy + ScaleUIPx(y + 14), 14, scheme.on_surface_variant);
     if(a->message[0] != '\0')
@@ -1120,7 +1148,7 @@ draw_profiles_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
 {
     UIMaterialScheme scheme = GetUIMaterialScheme();
     Color text = GetThemeText();
-    UITextInputStyle style = input_style();
+    TextInputStyle style = input_style();
     int half_w = (inner_w - 12) / 2;
     int i;
 
@@ -1133,9 +1161,9 @@ draw_profiles_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
         keep_focused_field_visible(area, &a->profile_name, field);
     }
     y += 70;
-    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Current", UI_BUTTON_STYLE_PRIMARY, 0))
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Current", ButtonStylePrimary, 0))
         save_current_profile(a);
-    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Delete", UI_BUTTON_STYLE_SECONDARY, a->selected_profile < 0))
+    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Delete", ButtonStyleSecondary, a->selected_profile < 0))
         delete_selected_profile(a);
     y += 58;
 
@@ -1151,7 +1179,7 @@ draw_profiles_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
 
         snprintf(label, sizeof(label), "%s  -  %s", p->name, p->site[0] != '\0' ? p->site : "no site");
         if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42),
-                  label, i == a->selected_profile ? UI_BUTTON_STYLE_PRIMARY : UI_BUTTON_STYLE_SECONDARY, 0)) {
+                  label, i == a->selected_profile ? ButtonStylePrimary : ButtonStyleSecondary, 0)) {
             a->selected_profile = i;
             apply_profile(a, p);
             a->view = VIEW_GENERATE;
@@ -1170,7 +1198,7 @@ draw_settings_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
 {
     UIMaterialScheme scheme = GetUIMaterialScheme();
     Color text = GetThemeText();
-    UITextInputStyle style = input_style();
+    TextInputStyle style = input_style();
     int half_w = (inner_w - 12) / 2;
 
     label_text_px("PASSWORD DEFAULTS", cx, cy + ScaleUIPx(y), 12, scheme.primary);
@@ -1214,7 +1242,7 @@ draw_settings_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
     checkbox(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), "Symbols", &a->symbols);
     y += 62;
 
-    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Save Settings", UI_BUTTON_STYLE_PRIMARY, 0))
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Save Settings", ButtonStylePrimary, 0))
         save_settings(a);
     y += 64;
 
@@ -1233,7 +1261,7 @@ draw_settings_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
         if(fp)
             fingerprint_button(a, cx + ScaleUIPx(field_w + 8), cy + ScaleUIPx(y + 22), ScaleUIPx(42), fp_disabled);
         if(button(cx + ScaleUIPx(field_w + (fp ? 58 : 8)), cy + ScaleUIPx(y + 22), ScaleUIPx(72), ScaleUIPx(38),
-                  a->reveal ? "Hide" : "Reveal", UI_BUTTON_STYLE_SECONDARY, 0))
+                  a->reveal ? "Hide" : "Reveal", ButtonStyleSecondary, 0))
             a->reveal = !a->reveal;
     }
     y += 82;
@@ -1255,28 +1283,28 @@ draw_settings_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
     else
         label_text_px("No saved master password", cx, cy + ScaleUIPx(y), 12, scheme.on_surface_variant);
     y += 36;
-    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Save With Fingerprint", UI_BUTTON_STYLE_PRIMARY, !android_bridge_biometric_available())) {
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Save With Fingerprint", ButtonStylePrimary, !android_bridge_biometric_available())) {
         android_bridge_set_soft_keyboard(0);
         a->settings.use_biometric = 1;
         a->secure_action = 2;
         android_bridge_save_master(a->master.buffer, 1);
     }
     y += 50;
-    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Without", UI_BUTTON_STYLE_SECONDARY, 0)) {
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Without", ButtonStyleSecondary, 0)) {
         android_bridge_set_soft_keyboard(0);
         a->settings.use_biometric = 0;
         a->secure_action = 2;
         android_bridge_save_master(a->master.buffer, 0);
     }
-    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Unlock", UI_BUTTON_STYLE_SECONDARY, !android_bridge_master_saved())) {
+    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Unlock", ButtonStyleSecondary, !android_bridge_master_saved())) {
         android_bridge_set_soft_keyboard(0);
         a->secure_action = 1;
         android_bridge_unlock_master();
     }
     y += 50;
-    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Settings", UI_BUTTON_STYLE_SECONDARY, 0))
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Settings", ButtonStyleSecondary, 0))
         save_settings(a);
-    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Forget Master", UI_BUTTON_STYLE_SECONDARY, !android_bridge_master_saved())) {
+    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Forget Master", ButtonStyleSecondary, !android_bridge_master_saved())) {
         a->secure_action = 2;
         android_bridge_clear_master();
         field_clear(&a->master);

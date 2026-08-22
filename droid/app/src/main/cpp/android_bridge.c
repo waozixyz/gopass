@@ -462,7 +462,7 @@ Java_xyz_waozi_pass_MainActivity_nativeTextInputCommit(JNIEnv *env, jobject thiz
 {
     (void)env;
     (void)thiz;
-    QueueUITextInputCodepoint((int)codepoint);
+    QueueTextInputCodepoint((int)codepoint);
 }
 
 JNIEXPORT void JNICALL
@@ -470,7 +470,7 @@ Java_xyz_waozi_pass_MainActivity_nativeTextInputBackspace(JNIEnv *env, jobject t
 {
     (void)env;
     (void)thiz;
-    QueueUITextInputBackspace();
+    QueueTextInputBackspace();
 }
 
 JNIEXPORT void JNICALL
@@ -478,7 +478,7 @@ Java_xyz_waozi_pass_MainActivity_nativeTextInputEnter(JNIEnv *env, jobject thiz)
 {
     (void)env;
     (void)thiz;
-    QueueUITextInputEnter();
+    QueueTextInputEnter();
 }
 
 #else /* !ANDROID_BUILD */

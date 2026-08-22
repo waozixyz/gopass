@@ -1,4 +1,4 @@
-.PHONY: all cli gui native run test native-test web web-canvas site install install-cli uninstall-cli install-gui uninstall-gui package-deb package-appimage android-debug
+.PHONY: all cli gui native run test native-test check-submodule-urls web web-canvas site web-smoke android-debug android-smoke e2e install install-cli uninstall-cli install-gui uninstall-gui package-deb package-appimage
 
 BIN_DIR ?= $(HOME)/bin
 DATA_DIR ?= $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)
@@ -66,6 +66,9 @@ native-test:
 	cc -Wall -Wextra -O2 -Inative native/pass_core.c native/pass_core_test.c -o build/pass_core_test
 	./build/pass_core_test
 
+check-submodule-urls:
+	bash scripts/check_submodule_urls.sh
+
 ANDROID_DIR := droid
 ANDROID_ABIS ?= armeabi-v7a,arm64-v8a
 
@@ -75,6 +78,9 @@ android-debug:
 	cp $(ANDROID_DIR)/app/build/outputs/apk/debug/app-universal-debug.apk build/pass-android-debug.apk
 	cp $(ANDROID_DIR)/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk build/pass-android-arm64-v8a-debug.apk
 	cp $(ANDROID_DIR)/app/build/outputs/apk/debug/app-armeabi-v7a-debug.apk build/pass-android-armeabi-v7a-debug.apk
+
+android-smoke: android-debug
+	bash scripts/android_smoke.sh
 
 web:
 	./web/build.sh
@@ -100,6 +106,11 @@ site: web
 	test -f build/site/index.html
 	test -f build/site/app/pass.wasm
 	test -f build/site/app/index.wasm
+
+web-smoke: site
+	bash scripts/web_smoke.sh
+
+e2e: check-submodule-urls test native-test gui web-canvas site web-smoke android-debug android-smoke
 
 package-deb: gui
 	./scripts/package-deb.sh

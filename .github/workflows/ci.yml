@@ -19,22 +19,13 @@ jobs:
     name: Submodule URLs are public HTTPS
     runs-on: ubuntu-latest
     steps:
-      # Plain checkout on purpose: the guard must not depend on fetching
-      # the submodules it validates (an SSH URL would break that fetch).
+      # Plain checkout on purpose: the guard validates URLs before allowing
+      # recursive submodule checkout to continue.
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Reject non-HTTPS submodule URLs
-        run: |
-          set -eu
-          if [ ! -f .gitmodules ]; then echo "no submodules - ok"; exit 0; fi
-          bad=$(grep -nE '^[[:space:]]*url[[:space:]]*=' .gitmodules \
-              | grep -vE '^[0-9]+:[[:space:]]*url[[:space:]]*=[[:space:]]*https://' || true)
-          if [ -n "$bad" ]; then
-            echo "::error::Non-HTTPS submodule URL(s) break fresh clones and CI:$bad"
-            exit 1
-          fi
-          echo "all submodule URLs HTTPS - ok"
+        run: scripts/check_submodule_urls.sh
 
   test:
     runs-on: ubuntu-latest
@@ -92,6 +83,7 @@ jobs:
 
   build-gui:
     name: GUI (${{ matrix.arch }})
+    needs: guard-submodule-urls
     strategy:
       matrix:
         include:

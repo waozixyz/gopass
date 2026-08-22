@@ -115,7 +115,7 @@ main(int argc, char **argv)
     setup_ui_font();
     setup_emoji_font();
     setup_shapes_texture();
-    SetUITextInputPlatformCallback(android_bridge_set_soft_keyboard);
+    SetTextInputPlatformCallback(android_bridge_set_soft_keyboard);
     SetTargetFPS(60);
 
     app = pass_app();
