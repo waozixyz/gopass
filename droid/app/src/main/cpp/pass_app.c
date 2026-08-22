@@ -121,6 +121,7 @@ struct PassApp {
     char message[160];
     AppView view;
     AppSettings settings;
+    AppSettings persisted_settings;
     SavedProfile profiles[MAX_PROFILES];
     int profile_count;
     int selected_profile;
@@ -230,10 +231,11 @@ load_settings(PassApp *a)
     a->digits = a->settings.digits;
     a->symbols = a->settings.symbols;
     field_set(&a->exclude, a->settings.exclude);
+    a->persisted_settings = a->settings;
 }
 
 static void
-save_settings(PassApp *a)
+write_settings(PassApp *a, int announce)
 {
     FILE *f = fopen("settings.cfg", "w");
 
@@ -260,10 +262,44 @@ save_settings(PassApp *a)
     fprintf(f, "symbols=%d\n", a->settings.symbols ? 1 : 0);
     fprintf(f, "exclude=%s\n", a->settings.exclude);
     fclose(f);
+    a->persisted_settings = a->settings;
 #if defined(PLATFORM_WEB)
     ScheduleWebStorageSync(250, 0);
 #endif
-    snprintf(a->message, sizeof(a->message), "%s", "Settings saved");
+    if(announce)
+        snprintf(a->message, sizeof(a->message), "%s", "Settings saved");
+}
+
+static void
+save_settings(PassApp *a)
+{
+    write_settings(a, 1);
+}
+
+static int
+settings_match_current(PassApp *a)
+{
+    char exclude[128];
+
+    copy_sanitized(exclude, sizeof(exclude), field_text(&a->exclude));
+    return a->persisted_settings.length == a->length &&
+           a->persisted_settings.counter == a->counter &&
+           a->persisted_settings.lower == a->lower &&
+           a->persisted_settings.upper == a->upper &&
+           a->persisted_settings.digits == a->digits &&
+           a->persisted_settings.symbols == a->symbols &&
+           a->persisted_settings.auto_copy == a->settings.auto_copy &&
+           a->persisted_settings.clear_after_seconds == a->settings.clear_after_seconds &&
+           a->persisted_settings.show_fingerprint == a->settings.show_fingerprint &&
+           a->persisted_settings.use_biometric == a->settings.use_biometric &&
+           strcmp(a->persisted_settings.exclude, exclude) == 0;
+}
+
+static void
+autosave_settings(PassApp *a)
+{
+    if(!settings_match_current(a))
+        write_settings(a, 0);
 }
 
 static void
@@ -1328,6 +1364,7 @@ pass_app_draw(PassApp *a, int surface_w, int surface_h, float dpi,
         draw_wide(a, ui_w, ui_h, top_reserved);
     else
         draw_narrow(a, ui_w, ui_h, top_reserved, bottom_reserved);
+    autosave_settings(a);
     draw_bottom_nav(a, surface_w, surface_h, ScaleUIPx(bottom_reserved));
 }
 

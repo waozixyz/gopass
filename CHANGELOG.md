@@ -6,6 +6,8 @@
   available from the generator and settings screens.
 - Clear unlocked master-password text and generated passwords from the Android
   screen after a short timeout.
+- Autosave Android generator defaults when length, counter, character classes,
+  excluded characters, or biometric display settings change.
 - Keep Android form fields visible while the keyboard is open, with better
   spacing around settings and excluded-character controls.
 - Run the real Pass app at pass.waozi.xyz/app through the Kryon canvas UI,
