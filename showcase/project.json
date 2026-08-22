@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "slug": "pass",
+  "name": "Pass",
+  "summary": "Deterministic password generator with CLI, desktop, Android, and browser builds.",
+  "repository": {
+    "platform": "github",
+    "url": "https://github.com/waozixyz/pass",
+    "owner": "waozixyz",
+    "name": "pass"
+  },
+  "homepage": "https://pass.waozi.xyz",
+  "banner": "showcase/banner.png",
+  "tags": ["security", "passwords", "desktop", "mobile", "web"],
+  "featured": true
+}
