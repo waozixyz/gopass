@@ -21,6 +21,7 @@
 #include <time.h>
 
 #define CLIPBOARD_LIFETIME_MS 20000
+#define SECRET_FIELD_LIFETIME_MS 20000
 #define MAX_PROFILES 32
 #define MASTER_EMOJI_COUNT 4
 
@@ -129,6 +130,8 @@ struct PassApp {
     char clip_value[136];
     int64_t clip_expires_ms;
     int clip_has_value;
+    int64_t master_expires_ms;
+    int64_t generated_expires_ms;
     int scroll_offset;
 };
 
@@ -477,6 +480,49 @@ clipboard_clear(PassApp *a)
 }
 
 static void
+clear_generated(PassApp *a)
+{
+    memset(a->generated, 0, sizeof(a->generated));
+    a->generated_expires_ms = 0;
+}
+
+static void
+arm_master_timeout(PassApp *a)
+{
+    if(a->master.buffer[0] == '\0')
+        a->master_expires_ms = 0;
+    else
+        a->master_expires_ms = now_ms() + SECRET_FIELD_LIFETIME_MS;
+}
+
+static void
+arm_generated_timeout(PassApp *a)
+{
+    if(a->generated[0] == '\0')
+        a->generated_expires_ms = 0;
+    else
+        a->generated_expires_ms = now_ms() + SECRET_FIELD_LIFETIME_MS;
+}
+
+static void
+secret_tick(PassApp *a)
+{
+    int64_t now = now_ms();
+
+    if(a->master_expires_ms > 0 && now >= a->master_expires_ms) {
+        field_clear(&a->master);
+        a->master_expires_ms = 0;
+        a->reveal = 0;
+        snprintf(a->message, sizeof(a->message), "%s", "Master password cleared");
+    }
+    if(a->generated_expires_ms > 0 && now >= a->generated_expires_ms) {
+        clear_generated(a);
+        if(a->message[0] == '\0' || strcmp(a->message, "Master password cleared") != 0)
+            snprintf(a->message, sizeof(a->message), "%s", "Generated password cleared");
+    }
+}
+
+static void
 generate(PassApp *a)
 {
     PassOptions options;
@@ -495,10 +541,12 @@ generate(PassApp *a)
                        field_text(&a->master), &options,
                        a->generated, sizeof(a->generated),
                        err, sizeof(err)) != 0) {
-        a->generated[0] = '\0';
+        clear_generated(a);
         snprintf(a->message, sizeof(a->message), "%s", err);
         return;
     }
+    arm_master_timeout(a);
+    arm_generated_timeout(a);
     if(a->settings.auto_copy) {
         clipboard_copy_for(a, a->generated, a->settings.clear_after_seconds);
         if(a->settings.clear_after_seconds > 0)
@@ -526,14 +574,18 @@ poll_secure_result(PassApp *a)
     if(status == 2) {
         if(a->secure_action == 1) {
             field_set(&a->master, result);
+            arm_master_timeout(a);
             snprintf(a->message, sizeof(a->message), "%s", "Master password unlocked");
         } else {
+            field_clear(&a->master);
+            a->master_expires_ms = 0;
             snprintf(a->message, sizeof(a->message), "%s", result);
         }
     } else if(status == 3) {
         snprintf(a->message, sizeof(a->message), "%s", result[0] != '\0' ? result : "Secure storage failed");
     }
     a->secure_action = 0;
+    memset(result, 0, sizeof(result));
 }
 
 static UITextInputStyle
@@ -805,7 +857,8 @@ draw_wide(PassApp *a, int width, int height, int top_reserved)
     if(button(ScaleUIPx(x + 356), ScaleUIPx(y), ScaleUIPx(120), ScaleUIPx(42),
               "Clear", UI_BUTTON_STYLE_SECONDARY, 0)) {
         field_clear(&a->master);
-        a->generated[0] = '\0';
+        a->master_expires_ms = 0;
+        clear_generated(a);
         snprintf(a->message, sizeof(a->message), "%s", "Cleared");
     }
     y += 56;
@@ -1010,7 +1063,8 @@ draw_generate_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
     }
     if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Clear", UI_BUTTON_STYLE_SECONDARY, 0)) {
         field_clear(&a->master);
-        a->generated[0] = '\0';
+        a->master_expires_ms = 0;
+        clear_generated(a);
         snprintf(a->message, sizeof(a->message), "%s", "Cleared");
     }
     y += 50;
@@ -1173,6 +1227,7 @@ draw_settings_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
     }
     y += 50;
     if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Without", UI_BUTTON_STYLE_SECONDARY, 0)) {
+        android_bridge_set_soft_keyboard(0);
         a->settings.use_biometric = 0;
         a->secure_action = 2;
         android_bridge_save_master(a->master.buffer, 0);
@@ -1188,6 +1243,8 @@ draw_settings_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, i
     if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Forget Master", UI_BUTTON_STYLE_SECONDARY, !android_bridge_master_saved())) {
         a->secure_action = 2;
         android_bridge_clear_master();
+        field_clear(&a->master);
+        a->master_expires_ms = 0;
     }
     y += 58;
     if(a->message[0] != '\0') {
@@ -1265,6 +1322,7 @@ pass_app_draw(PassApp *a, int surface_w, int surface_h, float dpi,
     (void)ui_h;
     Background(GetThemeBackground());
     clipboard_tick(a);
+    secret_tick(a);
     poll_secure_result(a);
     if(ui_w >= 760 && ui_w > ui_h)
         draw_wide(a, ui_w, ui_h, top_reserved);
@@ -1280,6 +1338,6 @@ pass_app_shutdown(PassApp *a)
         return;
     field_clear(&a->master);
     clipboard_clear(a);
-    a->generated[0] = '\0';
+    clear_generated(a);
     UnloadAllUIIconTextures(a->icons);
 }

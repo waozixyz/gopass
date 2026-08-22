@@ -4,6 +4,8 @@
 
 - Save and reuse Android master-password defaults, with fingerprint unlock
   available from the generator and settings screens.
+- Clear unlocked master-password text and generated passwords from the Android
+  screen after a short timeout.
 - Keep Android form fields visible while the keyboard is open, with better
   spacing around settings and excluded-character controls.
 - Run the real Pass app at pass.waozi.xyz/app through the Kryon canvas UI,
