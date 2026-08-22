@@ -6,11 +6,13 @@ import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Insets;
+import android.graphics.Rect;
 import android.hardware.biometrics.BiometricPrompt;
 import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
+import android.security.keystore.UserNotAuthenticatedException;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.TypedValue;
@@ -37,10 +39,13 @@ import javax.crypto.spec.GCMParameterSpec;
  */
 public class MainActivity extends NativeActivity {
     private static final String SECURE_PREFS = "pass_secure";
-    private static final String KEY_ALIAS = "pass_master_key";
+    private static final String KEY_ALIAS_LEGACY = "pass_master_key";
+    private static final String KEY_ALIAS_PLAIN = "pass_master_key_plain";
+    private static final String KEY_ALIAS_AUTH = "pass_master_key_auth";
     private static final String PREF_CIPHERTEXT = "master_ciphertext";
     private static final String PREF_IV = "master_iv";
     private static final String PREF_BIOMETRIC = "master_biometric";
+    private static final String PREF_KEY_ALIAS = "master_key_alias";
     private static final int SECURE_IDLE = 0;
     private static final int SECURE_PENDING = 1;
     private static final int SECURE_OK = 2;
@@ -57,7 +62,7 @@ public class MainActivity extends NativeActivity {
     private int secureStatus = SECURE_IDLE;
     private String secureResult = "";
 
-    private native void nativeSetInsets(int status, int nav,
+    private native void nativeSetInsets(int status, int nav, int ime,
         int cutoutLeft, int cutoutTop, int cutoutRight, int cutoutBottom);
     private native void nativeSetDeviceDensity(float density);
     private native void nativeTextInputCommit(int codepoint);
@@ -220,24 +225,10 @@ public class MainActivity extends NativeActivity {
                     setSecureError(biometricUnavailableMessage());
                     return;
                 }
-                try {
-                    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                    cipher.init(Cipher.ENCRYPT_MODE, getOrCreateMasterKey());
-                    byte[] encrypted = cipher.doFinal(master.getBytes(StandardCharsets.UTF_8));
-                    byte[] iv = cipher.getIV();
-                    if (iv == null || iv.length == 0) {
-                        setSecureError("Save failed: missing encryption IV");
-                        return;
-                    }
-
-                    SharedPreferences.Editor editor = getSharedPreferences(SECURE_PREFS, MODE_PRIVATE).edit();
-                    editor.putString(PREF_IV, b64(iv));
-                    editor.putString(PREF_CIPHERTEXT, b64(encrypted));
-                    editor.putBoolean(PREF_BIOMETRIC, requireBiometric);
-                    editor.apply();
-                    setSecureOk("Master password saved");
-                } catch (Exception e) {
-                    setSecureError("Save failed: " + e.getMessage());
+                if (requireBiometric) {
+                    authenticateThenSave(master);
+                } else {
+                    encryptAndStoreMaster(master, false);
                 }
             }
         });
@@ -261,6 +252,31 @@ public class MainActivity extends NativeActivity {
     }
 
     private void authenticateThenDecrypt() {
+        promptForBiometric("Unlock master password",
+                "Use your fingerprint",
+                "pass will decrypt the saved master password after unlock",
+                new Runnable() {
+            @Override
+            public void run() {
+                decryptStoredMaster();
+            }
+        });
+    }
+
+    private void authenticateThenSave(final String master) {
+        promptForBiometric("Save master password",
+                "Use your fingerprint",
+                "pass will require fingerprint unlock for the saved master password",
+                new Runnable() {
+            @Override
+            public void run() {
+                encryptAndStoreMaster(master, true);
+            }
+        });
+    }
+
+    private void promptForBiometric(String title, String subtitle, String description,
+                                    final Runnable onSuccess) {
         if (!isBiometricAvailable()) {
             setSecureError(biometricUnavailableMessage());
             return;
@@ -283,16 +299,16 @@ public class MainActivity extends NativeActivity {
                     }
                 };
                 BiometricPrompt prompt = new BiometricPrompt.Builder(MainActivity.this)
-                    .setTitle("Unlock master password")
-                    .setSubtitle("Use your fingerprint or device credential")
-                    .setDescription("pass will decrypt the saved master password after unlock")
+                    .setTitle(title)
+                    .setSubtitle(subtitle)
+                    .setDescription(description)
                     .setNegativeButton("Cancel", executor, (dialog, which) -> setSecureError("Unlock canceled"))
                     .build();
                 prompt.authenticate(new CancellationSignal(), executor,
                     new BiometricPrompt.AuthenticationCallback() {
                         @Override
                         public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
-                            decryptStoredMaster();
+                            onSuccess.run();
                         }
 
                         @Override
@@ -309,6 +325,31 @@ public class MainActivity extends NativeActivity {
         });
     }
 
+    private void encryptAndStoreMaster(String master, boolean requireBiometric) {
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateMasterKey(requireBiometric));
+            byte[] encrypted = cipher.doFinal(master.getBytes(StandardCharsets.UTF_8));
+            byte[] iv = cipher.getIV();
+            if (iv == null || iv.length == 0) {
+                setSecureError("Save failed: missing encryption IV");
+                return;
+            }
+
+            SharedPreferences.Editor editor = getSharedPreferences(SECURE_PREFS, MODE_PRIVATE).edit();
+            editor.putString(PREF_IV, b64(iv));
+            editor.putString(PREF_CIPHERTEXT, b64(encrypted));
+            editor.putBoolean(PREF_BIOMETRIC, requireBiometric);
+            editor.putString(PREF_KEY_ALIAS, requireBiometric ? KEY_ALIAS_AUTH : KEY_ALIAS_PLAIN);
+            editor.apply();
+            setSecureOk(requireBiometric ? "Master password saved with fingerprint" : "Master password saved");
+        } catch (UserNotAuthenticatedException e) {
+            setSecureError("Unlock with fingerprint first");
+        } catch (Exception e) {
+            setSecureError("Save failed: " + e.getMessage());
+        }
+    }
+
     private void decryptStoredMaster() {
         try {
             SharedPreferences prefs = getSharedPreferences(SECURE_PREFS, MODE_PRIVATE);
@@ -319,28 +360,53 @@ public class MainActivity extends NativeActivity {
                 return;
             }
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, getOrCreateMasterKey(), new GCMParameterSpec(128, unb64(ivText)));
+            cipher.init(Cipher.DECRYPT_MODE, getStoredMasterKey(), new GCMParameterSpec(128, unb64(ivText)));
             byte[] decrypted = cipher.doFinal(unb64(encryptedText));
             setSecureOk(new String(decrypted, StandardCharsets.UTF_8));
+        } catch (UserNotAuthenticatedException e) {
+            setSecureError("Unlock with fingerprint first");
         } catch (Exception e) {
             setSecureError("Unlock failed: " + e.getMessage());
         }
     }
 
-    private SecretKey getOrCreateMasterKey() throws Exception {
+    private SecretKey getStoredMasterKey() throws Exception {
+        SharedPreferences prefs = getSharedPreferences(SECURE_PREFS, MODE_PRIVATE);
+        String alias = prefs.getString(PREF_KEY_ALIAS, KEY_ALIAS_LEGACY);
+        boolean requireAuth = KEY_ALIAS_AUTH.equals(alias);
+        return getOrCreateMasterKey(alias, requireAuth);
+    }
+
+    private SecretKey getOrCreateMasterKey(boolean requireAuth) throws Exception {
+        return getOrCreateMasterKey(requireAuth ? KEY_ALIAS_AUTH : KEY_ALIAS_PLAIN, requireAuth);
+    }
+
+    private SecretKey getOrCreateMasterKey(String alias, boolean requireAuth) throws Exception {
         KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
         keyStore.load(null);
-        if (keyStore.containsAlias(KEY_ALIAS)) {
-            return (SecretKey)keyStore.getKey(KEY_ALIAS, null);
+        if (keyStore.containsAlias(alias)) {
+            return (SecretKey)keyStore.getKey(alias, null);
         }
         KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
-                KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+        KeyGenParameterSpec.Builder spec = new KeyGenParameterSpec.Builder(
+                alias, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(true)
-            .build();
-        generator.init(spec);
+            .setRandomizedEncryptionRequired(true);
+        if (requireAuth) {
+            spec.setUserAuthenticationRequired(true);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                spec.setUserAuthenticationParameters(30,
+                        KeyProperties.AUTH_BIOMETRIC_STRONG | KeyProperties.AUTH_DEVICE_CREDENTIAL);
+            } else {
+                spec.setUserAuthenticationValidityDurationSeconds(30);
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                spec.setInvalidatedByBiometricEnrollment(true);
+            }
+        }
+        KeyGenParameterSpec builtSpec = spec.build();
+        generator.init(builtSpec);
         return generator.generateKey();
     }
 
@@ -441,7 +507,8 @@ public class MainActivity extends NativeActivity {
             }
         });
 
-        // Startup safety net: catch the initial layout pass.
+        // Keep the native UI updated when the soft keyboard changes the
+        // visible frame on API levels where IME insets are not reported.
         decorView.getViewTreeObserver().addOnGlobalLayoutListener(
                 new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -452,7 +519,6 @@ public class MainActivity extends NativeActivity {
                         updateInsets(insets);
                     }
                 }
-                decorView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
             }
         });
 
@@ -471,16 +537,20 @@ public class MainActivity extends NativeActivity {
 
         int statusBar = 0;
         int navBar = 0;
+        int imeBottom = 0;
         int cLeft = 0, cTop = 0, cRight = 0, cBottom = 0;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Insets systemBars = insets.getInsetsIgnoringVisibility(
                     WindowInsets.Type.systemBars());
+            Insets ime = insets.getInsets(WindowInsets.Type.ime());
             statusBar = systemBars.top;
             navBar = systemBars.bottom;
+            imeBottom = ime.bottom;
         } else {
             statusBar = insets.getSystemWindowInsetTop();
             navBar = insets.getSystemWindowInsetBottom();
+            imeBottom = inferImeBottom(navBar);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -493,6 +563,17 @@ public class MainActivity extends NativeActivity {
             }
         }
 
-        nativeSetInsets(statusBar, navBar, cLeft, cTop, cRight, cBottom);
+        nativeSetInsets(statusBar, navBar, imeBottom, cLeft, cTop, cRight, cBottom);
+    }
+
+    private int inferImeBottom(int navBar) {
+        View decorView = getWindow().getDecorView();
+        Rect visible = new Rect();
+        decorView.getWindowVisibleDisplayFrame(visible);
+        int rootHeight = decorView.getRootView().getHeight();
+        int hiddenBottom = rootHeight - visible.bottom;
+
+        if (hiddenBottom <= navBar) return 0;
+        return hiddenBottom;
     }
 }

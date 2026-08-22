@@ -47,13 +47,22 @@ android {
         applicationId 'xyz.waozi.pass'
         minSdk 21
         targetSdk 36
-        versionCode 4
-        versionName "0.2.3"
+        versionCode 5
+        versionName "0.2.4"
         // Default to the two realistic phone targets; override with
         // -Pabi=x86_64 etc. for emulator builds.
         def abis = project.findProperty('abi') ?: 'armeabi-v7a,arm64-v8a'
         ndk {
             abis.split(',').collect { it.trim() }.each { abiFilters it }
+        }
+    }
+
+    splits {
+        abi {
+            enable = (project.findProperty('splitApks') ?: 'false').toString().toBoolean()
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a'
+            universalApk true
         }
     }
 

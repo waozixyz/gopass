@@ -82,6 +82,8 @@ int
 main(int argc, char **argv)
 {
     PassApp *app;
+    int window_width = 720;
+    int window_height = 740;
 
     (void)argc;
     (void)argv;
@@ -91,9 +93,14 @@ main(int argc, char **argv)
     android_bridge_init();
     if(chdir("/data/user/0/xyz.waozi.pass/files") != 0)
         TraceLog(LOG_WARNING, "PASS: failed to switch to files directory");
+    window_width = 0;
+    window_height = 0;
+#elif defined(PLATFORM_WEB)
+    SetConfigFlags(GetWebWindowFlags());
+    GetWebViewportSize(window_width, window_height, &window_width, &window_height);
 #endif
 
-    InitWindow(0, 0, "pass");
+    InitWindow(window_width, window_height, "Pass");
     if(!IsWindowReady()) {
         TraceLog(LOG_ERROR, "PASS: InitWindow failed");
         return 1;
@@ -102,8 +109,9 @@ main(int argc, char **argv)
     SetThemeStyle(THEME_STYLE_MATERIAL);
     SetCurrentTheme(GetDefaultThemeForThemeStyle(THEME_STYLE_MATERIAL), 0);
     android_bridge_apply_system_theme();
-    SetThemeSource(THEME_SOURCE_SYSTEM);
     SetThemeMode(THEME_MODE_SYSTEM);
+    SetThemeSource(THEME_SOURCE_SYSTEM);
+    ApplyCurrentUITheme();
     setup_ui_font();
     setup_emoji_font();
     setup_shapes_texture();
@@ -111,11 +119,18 @@ main(int argc, char **argv)
     SetTargetFPS(60);
 
     app = pass_app();
+    TraceLog(LOG_INFO, "PASS: app ready");
     while(!WindowShouldClose()) {
         int width = GetScreenWidth();
         int height = GetScreenHeight();
         Vector2 scale = GetWindowScaleDPI();
         float dpi = scale.x > 0.0f ? scale.x : 1.0f;
+
+#if defined(PLATFORM_WEB)
+        SyncWebWindowSize();
+        width = GetScreenWidth();
+        height = GetScreenHeight();
+#endif
 
         BeginDrawing();
         BeginUIFrame(width, height, dpi);

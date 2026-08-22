@@ -1,17 +1,88 @@
-(() => {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/app/sw.js', {scope: '/app/'}).then(registration => registration.update()).catch(() => {});
-  const byId = id => document.getElementById(id);
-  const generate = byId('generate'), copy = byId('copy'), result = byId('result'), message = byId('message');
-  let copied = '', clearTimer = 0;
-  document.addEventListener('pass-ready', () => { byId('runtime-status').textContent = 'Ready · runs locally'; generate.disabled = false; });
-  const go = new Go();
-  WebAssembly.instantiateStreaming(fetch('pass.wasm'), go.importObject).then(instance => go.run(instance.instance)).catch(error => { byId('runtime-status').textContent = 'Generator failed to load'; message.textContent = error; });
-  byId('reveal').addEventListener('click', () => { const master = byId('master'); master.type = master.type === 'password' ? 'text' : 'password'; byId('reveal').textContent = master.type === 'password' ? 'Reveal' : 'Hide'; });
-  generate.addEventListener('click', () => {
-    const response = window.passGenerate(byId('site').value, byId('login').value, byId('master').value, Number(byId('length').value), Number(byId('counter').value), byId('lower').checked, byId('upper').checked, byId('digits').checked, byId('symbols').checked, byId('exclude').value);
-    if (response.error) { result.textContent = 'Unable to generate'; message.textContent = response.error; copy.disabled = true; return; }
-    result.textContent = response.password; message.textContent = 'Generated locally in this tab'; copy.disabled = false;
+var statusElement = document.getElementById('status');
+var loadingScreen = document.getElementById('loading-screen');
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function() {});
+}
+
+function setStatus(text) {
+  if (statusElement) statusElement.textContent = text || '';
+}
+
+function hideLoadingScreen() {
+  if (!loadingScreen) return;
+  window.requestAnimationFrame(function() {
+    loadingScreen.classList.add('is-hidden');
   });
-  copy.addEventListener('click', async () => { await navigator.clipboard.writeText(result.textContent); copied = result.textContent; message.textContent = 'Copied; clipboard clears in 20 seconds'; clearTimeout(clearTimer); clearTimer = setTimeout(async () => { try { const current = await navigator.clipboard.readText(); if (current === copied) await navigator.clipboard.writeText(''); } catch (_) {} copied = ''; }, 20000); });
-  byId('clear').addEventListener('click', () => { ['site','login','master','exclude'].forEach(id => byId(id).value = ''); result.textContent = 'Your generated password appears here'; message.textContent = 'Cleared'; copy.disabled = true; byId('master').focus(); });
-})();
+}
+
+function hideWhenCanvasPaints() {
+  var checks = 0;
+  var timer = setInterval(function() {
+    checks += 1;
+    if (window.__kryCanvas && window.__kryCanvas.frames > 1) {
+      hideLoadingScreen();
+      clearInterval(timer);
+    } else if (checks > 300) {
+      clearInterval(timer);
+    }
+  }, 50);
+}
+
+function scheduleStorageSync(delay, logSuccess) {
+  if (typeof FS === 'undefined' || typeof FS.syncfs !== 'function') return;
+  Module.__kryonStorageSyncPending = true;
+  Module.__kryonStorageSyncLogSuccess = Module.__kryonStorageSyncLogSuccess || !!logSuccess;
+  if (Module.__kryonStorageSyncTimer) clearTimeout(Module.__kryonStorageSyncTimer);
+  Module.__kryonStorageSyncTimer = setTimeout(function() {
+    Module.__kryonStorageSyncTimer = 0;
+    Module.__kryonStorageSyncing = true;
+    Module.__kryonStorageSyncPending = false;
+    FS.syncfs(false, function(err) {
+      Module.__kryonStorageSyncing = false;
+      if (err) console.error('Pass storage sync failed:', err);
+      else if (Module.__kryonStorageSyncLogSuccess) console.log('Pass storage synced');
+      Module.__kryonStorageSyncLogSuccess = false;
+    });
+  }, Math.max(0, delay || 0));
+}
+
+var Module = {
+  canvas: document.getElementById('canvas'),
+  preRun: [function() {
+    if (typeof FS === 'undefined' || typeof IDBFS === 'undefined') return;
+    FS.mkdir('/pass-data');
+    FS.mount(IDBFS, {}, '/pass-data');
+    FS.chdir('/pass-data');
+    Module.addRunDependency('pass-idbfs');
+    FS.syncfs(true, function(err) {
+      if (err) console.error('Pass storage load failed:', err);
+      Module.removeRunDependency('pass-idbfs');
+    });
+  }],
+  setStatus: setStatus,
+  print: function(text) {
+    if (/PASS: app ready/.test(text || '')) hideLoadingScreen();
+    console.log(text);
+  },
+  printErr: function(text) {
+    console.error(text);
+  }
+};
+
+Module.__kryonScheduleStorageSync = scheduleStorageSync;
+Module.__kryonFlushStorageSync = function(logSuccess) {
+  scheduleStorageSync(0, logSuccess);
+};
+
+window.addEventListener('error', function(event) {
+  setStatus('App failed to load');
+  console.error(event.error || event.message);
+});
+
+var script = document.createElement('script');
+script.async = true;
+script.src = 'index.js';
+script.onload = function() { setStatus('Starting app...'); hideWhenCanvasPaints(); };
+script.onerror = function() { setStatus('App failed to load'); };
+document.body.appendChild(script);

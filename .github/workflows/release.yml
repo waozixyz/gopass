@@ -146,7 +146,7 @@ jobs:
           test -n "$KEYSTORE_BASE64" || { echo "::error::KEYSTORE_BASE64 secret is empty or missing"; exit 1; }
           mkdir -p "$HOME/.android"
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$HOME/.android/pass-release.keystore"
-      - name: Build release APK
+      - name: Build release APKs
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -156,17 +156,22 @@ jobs:
           test -n "$KEY_ALIAS" || { echo "::error::KEY_ALIAS secret is empty or missing"; exit 1; }
           chmod +x droid/gradlew
           ./droid/gradlew -p droid assembleRelease \
+            -PsplitApks=true \
             -Pkeystore.path="$HOME/.android/pass-release.keystore" \
             -Pkeystore.alias="$KEY_ALIAS" \
             -Pkeystore.password="$KEYSTORE_PASSWORD" \
             --stacktrace
           mkdir -p build/release
-          cp droid/app/build/outputs/apk/release/app-release.apk build/release/pass-android.apk
+          cp droid/app/build/outputs/apk/release/app-universal-release.apk build/release/pass-android.apk
+          cp droid/app/build/outputs/apk/release/app-arm64-v8a-release.apk build/release/pass-android-arm64-v8a.apk
+          cp droid/app/build/outputs/apk/release/app-armeabi-v7a-release.apk build/release/pass-android-armeabi-v7a.apk
           test -s build/release/pass-android.apk
+          test -s build/release/pass-android-arm64-v8a.apk
+          test -s build/release/pass-android-armeabi-v7a.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: build/release/pass-android.apk
+          path: build/release/pass-android*.apk
           if-no-files-found: error
 
   web:

@@ -18,10 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-go@v5
         with:
           go-version: 1.24.x
           cache: false
+      - name: Install Emscripten
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          "$HOME/emsdk/emsdk" install latest
+          "$HOME/emsdk/emsdk" activate latest
+          echo "EM_CONFIG=$HOME/emsdk/.emscripten" >> "$GITHUB_ENV"
+          echo "$HOME/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
       - name: Build Site
         run: |
           set -euo pipefail
@@ -29,6 +39,7 @@ jobs:
           test -s build/site/index.html
           test -s build/site/app/index.html
           test -s build/site/app/pass.wasm
+          test -s build/site/app/index.wasm
       - uses: actions/upload-artifact@v4
         with:
           name: pass-site

@@ -27,10 +27,16 @@ cp "$root_dir/web/site/manifest.webmanifest" "$out_dir/manifest.webmanifest"
 cp -R "$root_dir/web/site/icons" "$out_dir/icons"
 cp -R "$root_dir/web/site/app/icons" "$out_dir/app/icons"
 cp "$root_dir/web/site/app/sw.js" "$out_dir/app/sw.js"
+"${MAKE:-make}" -C "$root_dir" web-canvas
+cp "$root_dir/build/web-app/index.html" "$out_dir/app/index.html"
+cp "$root_dir/build/web-app/app.js" "$out_dir/app/app.js"
+cp "$root_dir/build/web-app/index.js" "$out_dir/app/index.js"
+cp "$root_dir/build/web-app/index.wasm" "$out_dir/app/index.wasm"
 cp "$goroot/lib/wasm/wasm_exec.js" "$out_dir/app/wasm_exec.js" 2>/dev/null || \
 	cp "$goroot/misc/wasm/wasm_exec.js" "$out_dir/app/wasm_exec.js"
 (cd "$root_dir/web/wasm" && GOOS=js GOARCH=wasm go build -o "$out_dir/app/pass.wasm" .)
 
 test -s "$out_dir/app/pass.wasm"
+test -s "$out_dir/app/index.wasm"
 test -s "$out_dir/home.js"
 printf 'built site at %s\n' "$out_dir"

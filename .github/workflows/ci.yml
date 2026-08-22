@@ -47,6 +47,14 @@ jobs:
         with:
           go-version: 1.25.x
           cache: false
+      - name: Install Emscripten
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          "$HOME/emsdk/emsdk" install latest
+          "$HOME/emsdk/emsdk" activate latest
+          echo "EM_CONFIG=$HOME/emsdk/.emscripten" >> "$GITHUB_ENV"
+          echo "$HOME/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
       - name: Test CLI and generator
         run: go test ./...
       - name: Build browser app
@@ -56,6 +64,7 @@ jobs:
           test -s build/site/index.html
           test -s build/site/app/index.html
           test -s build/site/app/pass.wasm
+          test -s build/site/app/index.wasm
       - name: Check formatting
         run: test -z "$(find . -path ./vendor -prune -o -name '*.go' -type f -print | xargs gofmt -l)"
       - name: Check fastlane metadata

@@ -4,6 +4,8 @@
 
 #include "android_bridge.h"
 
+#include <stddef.h>
+
 #if ANDROID_BUILD
 
 #include "kryon.h"
@@ -28,6 +30,7 @@ extern struct android_app *GetAndroidApp(void);
 static pthread_mutex_t bridge_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int insets_status_bar = 0;
 static int insets_nav_bar = 0;
+static int insets_ime_bottom = 0;
 static int insets_cutout_top = 0;
 static int insets_cutout_bottom = 0;
 static int insets_ready = 0;
@@ -83,6 +86,7 @@ android_bridge_init(void)
     pthread_mutex_lock(&bridge_mutex);
     insets_status_bar = 0;
     insets_nav_bar = 0;
+    insets_ime_bottom = 0;
     insets_cutout_top = 0;
     insets_cutout_bottom = 0;
     insets_ready = 0;
@@ -175,11 +179,12 @@ android_bridge_top_reserved(void)
 int
 android_bridge_bottom_reserved(void)
 {
-    int nav, cutout, bottom, ready;
+    int nav, ime, cutout, bottom, ready;
     float density;
 
     pthread_mutex_lock(&bridge_mutex);
     nav = insets_nav_bar;
+    ime = insets_ime_bottom;
     cutout = insets_cutout_bottom;
     density = device_density;
     ready = insets_ready;
@@ -188,6 +193,8 @@ android_bridge_bottom_reserved(void)
     if(!ready)
         return 48; /* conservative nav-bar guess until Java reports */
     bottom = nav > cutout ? nav : cutout;
+    if(ime > bottom)
+        bottom = ime;
     return scaled_inset(bottom, density);
 }
 
@@ -417,6 +424,7 @@ done:
 JNIEXPORT void JNICALL
 Java_xyz_waozi_pass_MainActivity_nativeSetInsets(JNIEnv *env, jobject thiz,
                                                    jint status_bar, jint nav_bar,
+                                                   jint ime_bottom,
                                                    jint cutout_left, jint cutout_top,
                                                    jint cutout_right, jint cutout_bottom)
 {
@@ -428,6 +436,7 @@ Java_xyz_waozi_pass_MainActivity_nativeSetInsets(JNIEnv *env, jobject thiz,
     pthread_mutex_lock(&bridge_mutex);
     insets_status_bar = status_bar;
     insets_nav_bar = nav_bar;
+    insets_ime_bottom = ime_bottom;
     insets_cutout_top = cutout_top;
     insets_cutout_bottom = cutout_bottom;
     insets_ready = 1;

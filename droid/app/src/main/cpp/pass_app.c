@@ -13,6 +13,7 @@
 #include "ui_scroll.h"
 #include "ui_scaling.h"
 #include "ui_text.h"
+#include "ui_color.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,6 +55,10 @@ typedef struct {
     int clear_after_seconds;
     int show_fingerprint;
     int use_biometric;
+    int length;
+    int counter;
+    int lower, upper, digits, symbols;
+    char exclude[128];
 } AppSettings;
 
 static const int master_emoji_codepoints[] = {
@@ -154,6 +159,10 @@ default_settings(AppSettings *settings)
     settings->clear_after_seconds = 20;
     settings->show_fingerprint = 1;
     settings->use_biometric = 0;
+    settings->length = 16;
+    settings->counter = 1;
+    settings->lower = settings->upper = settings->digits = settings->symbols = 1;
+    settings->exclude[0] = '\0';
 }
 
 static void
@@ -183,12 +192,41 @@ load_settings(PassApp *a)
             a->settings.show_fingerprint = atoi(value) != 0;
         else if(strcmp(key, "use_biometric") == 0)
             a->settings.use_biometric = atoi(value) != 0;
+        else if(strcmp(key, "length") == 0)
+            a->settings.length = atoi(value);
+        else if(strcmp(key, "counter") == 0)
+            a->settings.counter = atoi(value);
+        else if(strcmp(key, "lower") == 0)
+            a->settings.lower = atoi(value) != 0;
+        else if(strcmp(key, "upper") == 0)
+            a->settings.upper = atoi(value) != 0;
+        else if(strcmp(key, "digits") == 0)
+            a->settings.digits = atoi(value) != 0;
+        else if(strcmp(key, "symbols") == 0)
+            a->settings.symbols = atoi(value) != 0;
+        else if(strcmp(key, "exclude") == 0)
+            copy_sanitized(a->settings.exclude, sizeof(a->settings.exclude), value);
     }
     fclose(f);
     if(a->settings.clear_after_seconds < 0)
         a->settings.clear_after_seconds = 0;
     if(a->settings.clear_after_seconds > 3600)
         a->settings.clear_after_seconds = 3600;
+    if(a->settings.length <= 0)
+        a->settings.length = 16;
+    if(a->settings.length > 128)
+        a->settings.length = 128;
+    if(a->settings.counter <= 0)
+        a->settings.counter = 1;
+    if(a->settings.counter > 999999)
+        a->settings.counter = 999999;
+    a->length = a->settings.length;
+    a->counter = a->settings.counter;
+    a->lower = a->settings.lower;
+    a->upper = a->settings.upper;
+    a->digits = a->settings.digits;
+    a->symbols = a->settings.symbols;
+    field_set(&a->exclude, a->settings.exclude);
 }
 
 static void
@@ -200,11 +238,28 @@ save_settings(PassApp *a)
         snprintf(a->message, sizeof(a->message), "%s", "Could not save settings");
         return;
     }
+    a->settings.length = a->length;
+    a->settings.counter = a->counter;
+    a->settings.lower = a->lower;
+    a->settings.upper = a->upper;
+    a->settings.digits = a->digits;
+    a->settings.symbols = a->symbols;
+    copy_sanitized(a->settings.exclude, sizeof(a->settings.exclude), field_text(&a->exclude));
     fprintf(f, "auto_copy=%d\n", a->settings.auto_copy ? 1 : 0);
     fprintf(f, "clear_after_seconds=%d\n", a->settings.clear_after_seconds);
     fprintf(f, "show_fingerprint=%d\n", a->settings.show_fingerprint ? 1 : 0);
     fprintf(f, "use_biometric=%d\n", a->settings.use_biometric ? 1 : 0);
+    fprintf(f, "length=%d\n", a->settings.length);
+    fprintf(f, "counter=%d\n", a->settings.counter);
+    fprintf(f, "lower=%d\n", a->settings.lower ? 1 : 0);
+    fprintf(f, "upper=%d\n", a->settings.upper ? 1 : 0);
+    fprintf(f, "digits=%d\n", a->settings.digits ? 1 : 0);
+    fprintf(f, "symbols=%d\n", a->settings.symbols ? 1 : 0);
+    fprintf(f, "exclude=%s\n", a->settings.exclude);
     fclose(f);
+#if defined(PLATFORM_WEB)
+    ScheduleWebStorageSync(250, 0);
+#endif
     snprintf(a->message, sizeof(a->message), "%s", "Settings saved");
 }
 
@@ -276,6 +331,9 @@ save_profiles(PassApp *a)
                 p->digits ? 1 : 0, p->symbols ? 1 : 0, p->exclude);
     }
     fclose(f);
+#if defined(PLATFORM_WEB)
+    ScheduleWebStorageSync(250, 0);
+#endif
 }
 
 static void
@@ -516,12 +574,85 @@ draw_field(Field *f, Rectangle bounds, int font, UITextInputStyle style)
     return DrawUITextField(props);
 }
 
+static void
+keep_focused_field_visible(UIScrollArea area, Field *f, Rectangle bounds)
+{
+    if(f != NULL && f->focused)
+        EnsureUIScrollRectVisible(area, bounds, ScaleUIPx(28));
+}
+
 static int
 button(int x, int y, int w, int h, const char *label, UIButtonStyle style, int disabled)
 {
     int hover = 0;
 
     return DrawUIGenericButton(x, y, w, h, label, style, disabled, &hover);
+}
+
+static int
+can_biometric_unlock_master(void)
+{
+    return android_bridge_master_saved() && android_bridge_master_biometric() &&
+           android_bridge_biometric_available();
+}
+
+static const char *
+fingerprint_unavailable_message(void)
+{
+    if(!android_bridge_biometric_available()) {
+        if(android_bridge_biometric_setup_required())
+            return "Set up Android fingerprint first";
+        return "Fingerprint unlock is not available";
+    }
+    if(!android_bridge_master_saved())
+        return "Save master with fingerprint in Settings first";
+    if(!android_bridge_master_biometric())
+        return "Saved master does not require fingerprint";
+    return "Fingerprint unlock is not ready";
+}
+
+static int
+should_show_fingerprint_button(void)
+{
+    return can_biometric_unlock_master();
+}
+
+static int
+fingerprint_button(PassApp *a, int x, int y, int size, int disabled)
+{
+    UIMaterialScheme scheme = GetUIMaterialScheme();
+    Rectangle bounds = (Rectangle){(float)x, (float)y, (float)size, (float)size};
+    Color background = disabled ? scheme.surface_variant : scheme.primary;
+    Color border = disabled ? scheme.outline : LightenUIColor(scheme.outline, 18);
+    Color icon = disabled ? scheme.on_surface_variant : WHITE;
+    int clicked;
+
+    DrawRectangleRounded((Rectangle){bounds.x, bounds.y + (float)ScaleUIPx(2), bounds.width, bounds.height}, 0.18f, 10, DarkenUIColor(background, 16));
+    DrawRectangleRounded(bounds, 0.18f, 10, background);
+    DrawRectangleRoundedLinesEx(bounds, 0.18f, 10, 1.0f, border);
+
+    clicked = DrawUIIconButton((IconButtonProps){
+        .bounds = bounds,
+        .icon = a->icons[UI_ICON_TYPE_FINGERPRINT],
+        .icon_size = size - ScaleUIPx(16),
+        .icon_padding = ScaleUIPx(8),
+        .disabled = 0,
+        .background = BLANK,
+        .hover_background = BLANK,
+        .icon_color = icon,
+        .border = BLANK,
+        .radius = 0.18f,
+    });
+    if(clicked) {
+        if(disabled) {
+            snprintf(a->message, sizeof(a->message), "%s", fingerprint_unavailable_message());
+        } else {
+            android_bridge_set_soft_keyboard(0);
+            a->secure_action = 1;
+            android_bridge_unlock_master();
+        }
+    }
+    return clicked;
 }
 
 static void
@@ -592,6 +723,7 @@ draw_wide(PassApp *a, int width, int height, int top_reserved)
     int content_w = width - 64;
     int x, y;
 
+    (void)height;
     if(content_w > 720)
         content_w = 720;
     x = (width - content_w) / 2;
@@ -610,7 +742,15 @@ draw_wide(PassApp *a, int width, int height, int top_reserved)
     y += 76;
     label_text("Master password", x + 24, y, 14, text);
     a->master.secure = !a->reveal;
-    draw_field(&a->master, scaled_rect((float)x + 24, (float)y + 24, (float)content_w - 150, 38), 16, style);
+    {
+        int fp = should_show_fingerprint_button();
+        int fp_disabled = !can_biometric_unlock_master();
+        int field_w = content_w - (fp ? 196 : 150);
+
+        draw_field(&a->master, scaled_rect((float)x + 24, (float)y + 24, (float)field_w, 38), 16, style);
+        if(fp)
+            fingerprint_button(a, ScaleUIPx(x + content_w - 158), ScaleUIPx(y + 24), ScaleUIPx(38), fp_disabled);
+    }
     if(button(ScaleUIPx(x + content_w - 112), ScaleUIPx(y + 24), ScaleUIPx(88), ScaleUIPx(38),
               a->reveal ? "Hide" : "Reveal", UI_BUTTON_STYLE_SECONDARY, 0))
         a->reveal = !a->reveal;
@@ -646,13 +786,13 @@ draw_wide(PassApp *a, int width, int height, int top_reserved)
     }
     draw_field(&a->exclude, scaled_rect((float)x + 340, (float)y + 24, (float)content_w - 364, 38), 16, style);
     label_text("Excluded characters", x + 340, y, 14, text);
-    y += 76;
+    y += 86;
 
     checkbox(ScaleUIPx(x + 24), ScaleUIPx(y), "Lowercase", &a->lower);
     checkbox(ScaleUIPx(x + 174), ScaleUIPx(y), "Uppercase", &a->upper);
     checkbox(ScaleUIPx(x + 324), ScaleUIPx(y), "Digits", &a->digits);
     checkbox(ScaleUIPx(x + 444), ScaleUIPx(y), "Symbols", &a->symbols);
-    y += 48;
+    y += 58;
 
     if(button(ScaleUIPx(x + 24), ScaleUIPx(y), ScaleUIPx(150), ScaleUIPx(42),
               "Generate", UI_BUTTON_STYLE_PRIMARY, 0))
@@ -760,7 +900,24 @@ fingerprint_emoji(const char *master, char *out, size_t out_size)
 }
 
 static int
-draw_generate_page(PassApp *a, int cx, int cy, int inner_w, int y)
+draw_master_fingerprint_symbols(PassApp *a, int x, int y)
+{
+    UIMaterialScheme scheme = GetUIMaterialScheme();
+    char fp[64];
+    int font_token;
+
+    if(a == NULL || !a->settings.show_fingerprint || a->master.buffer[0] == '\0')
+        return 0;
+
+    fingerprint_emoji(a->master.buffer, fp, sizeof(fp));
+    font_token = PushUIFont("pass-emoji");
+    label_text_px(fp, x, y, 20, scheme.on_surface_variant);
+    PopUIFont(font_token);
+    return 30;
+}
+
+static int
+draw_generate_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, int y)
 {
     UIMaterialScheme scheme = GetUIMaterialScheme();
     Color text = GetThemeText();
@@ -769,32 +926,38 @@ draw_generate_page(PassApp *a, int cx, int cy, int inner_w, int y)
     int half_w = (inner_w - 12) / 2;
 
     label_text_px("Site", cx, cy + ScaleUIPx(y), 14, text);
-    draw_field(&a->site, (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)}, 16, style);
+    {
+        Rectangle field = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)};
+        draw_field(&a->site, field, 16, style);
+        keep_focused_field_visible(area, &a->site, field);
+    }
     y += 66;
     label_text_px("Login", cx, cy + ScaleUIPx(y), 14, text);
-    draw_field(&a->login, (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)}, 16, style);
+    {
+        Rectangle field = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)};
+        draw_field(&a->login, field, 16, style);
+        keep_focused_field_visible(area, &a->login, field);
+    }
     y += 66;
 
     label_text_px("Master password", cx, cy + ScaleUIPx(y), 14, text);
     a->master.secure = !a->reveal;
     {
-        int field_w = inner_w - 80;
-        draw_field(&a->master, (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(field_w), (float)ScaleUIPx(38)}, 16, style);
-        if(button(cx + ScaleUIPx(field_w + 8), cy + ScaleUIPx(y + 22), ScaleUIPx(72), ScaleUIPx(38),
+        int fp = should_show_fingerprint_button();
+        int fp_disabled = !can_biometric_unlock_master();
+        int field_w = inner_w - (fp ? 130 : 80);
+        Rectangle field = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(field_w), (float)ScaleUIPx(38)};
+
+        draw_field(&a->master, field, 16, style);
+        keep_focused_field_visible(area, &a->master, field);
+        if(fp)
+            fingerprint_button(a, cx + ScaleUIPx(field_w + 8), cy + ScaleUIPx(y + 22), ScaleUIPx(42), fp_disabled);
+        if(button(cx + ScaleUIPx(field_w + (fp ? 58 : 8)), cy + ScaleUIPx(y + 22), ScaleUIPx(72), ScaleUIPx(38),
                   a->reveal ? "Hide" : "Reveal", UI_BUTTON_STYLE_SECONDARY, 0))
             a->reveal = !a->reveal;
     }
     y += 64;
-    if(a->settings.show_fingerprint && a->master.buffer[0] != '\0') {
-        char fp[64];
-        int font_token;
-
-        fingerprint_emoji(a->master.buffer, fp, sizeof(fp));
-        font_token = PushUIFont("pass-emoji");
-        label_text_px(fp, cx, cy + ScaleUIPx(y), 20, scheme.on_surface_variant);
-        PopUIFont(font_token);
-        y += 30;
-    }
+    y += draw_master_fingerprint_symbols(a, cx, cy + ScaleUIPx(y));
 
     y += 6;
     label_text_px("Length", cx, cy + ScaleUIPx(y), 14, text);
@@ -821,18 +984,22 @@ draw_generate_page(PassApp *a, int cx, int cy, int inner_w, int y)
         props.value = &a->counter;
         Spinbox(props);
     }
-    y += 62;
+    y += 76;
 
     label_text_px("Excluded characters", cx, cy + ScaleUIPx(y), 14, text);
-    draw_field(&a->exclude, (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)}, 16, style);
-    y += 66;
+    {
+        Rectangle field = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)};
+        draw_field(&a->exclude, field, 16, style);
+        keep_focused_field_visible(area, &a->exclude, field);
+    }
+    y += 78;
 
     checkbox(cx, cy + ScaleUIPx(y), "Lowercase", &a->lower);
     checkbox(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), "Uppercase", &a->upper);
     y += 36;
     checkbox(cx, cy + ScaleUIPx(y), "Digits", &a->digits);
     checkbox(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), "Symbols", &a->symbols);
-    y += 44;
+    y += 56;
 
     if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Generate", UI_BUTTON_STYLE_PRIMARY, 0))
         generate(a);
@@ -859,7 +1026,7 @@ draw_generate_page(PassApp *a, int cx, int cy, int inner_w, int y)
 }
 
 static int
-draw_profiles_page(PassApp *a, int cx, int cy, int inner_w, int y)
+draw_profiles_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, int y)
 {
     UIMaterialScheme scheme = GetUIMaterialScheme();
     Color text = GetThemeText();
@@ -870,7 +1037,11 @@ draw_profiles_page(PassApp *a, int cx, int cy, int inner_w, int y)
     label_text_px("PROFILE", cx, cy + ScaleUIPx(y), 12, scheme.primary);
     y += 20;
     label_text_px("Name", cx, cy + ScaleUIPx(y), 14, text);
-    draw_field(&a->profile_name, (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)}, 16, style);
+    {
+        Rectangle field = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)};
+        draw_field(&a->profile_name, field, 16, style);
+        keep_focused_field_visible(area, &a->profile_name, field);
+    }
     y += 70;
     if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Current", UI_BUTTON_STYLE_PRIMARY, 0))
         save_current_profile(a);
@@ -905,52 +1076,109 @@ draw_profiles_page(PassApp *a, int cx, int cy, int inner_w, int y)
 }
 
 static int
-draw_settings_page(PassApp *a, int cx, int cy, int inner_w, int y)
+draw_settings_page(PassApp *a, UIScrollArea area, int cx, int cy, int inner_w, int y)
 {
     UIMaterialScheme scheme = GetUIMaterialScheme();
     Color text = GetThemeText();
+    UITextInputStyle style = input_style();
     int half_w = (inner_w - 12) / 2;
 
-    label_text_px("BEHAVIOR", cx, cy + ScaleUIPx(y), 12, scheme.primary);
+    label_text_px("PASSWORD DEFAULTS", cx, cy + ScaleUIPx(y), 12, scheme.primary);
     y += 24;
-    checkbox(cx, cy + ScaleUIPx(y), "Auto-copy after Generate", &a->settings.auto_copy);
-    y += 40;
-    checkbox(cx, cy + ScaleUIPx(y), "Show master fingerprint", &a->settings.show_fingerprint);
-    y += 44;
-    label_text_px("Clipboard seconds", cx, cy + ScaleUIPx(y), 14, text);
+    label_text_px("Length", cx, cy + ScaleUIPx(y), 14, text);
     {
         SpinboxProps props;
         memset(&props, 0, sizeof(props));
-        props.bounds = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(half_w), (float)ScaleUIPx(38)};
-        props.id = 501;
-        props.min = 0;
-        props.max = 3600;
-        props.step = 5;
-        props.value = &a->settings.clear_after_seconds;
+        props.bounds = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 20)), (float)ScaleUIPx(half_w), (float)ScaleUIPx(38)};
+        props.id = 511;
+        props.min = 1;
+        props.max = 128;
+        props.step = 1;
+        props.value = &a->length;
         Spinbox(props);
     }
-    y += 74;
+    label_text_px("Counter", cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), 14, text);
+    {
+        SpinboxProps props;
+        memset(&props, 0, sizeof(props));
+        props.bounds = (Rectangle){(float)(cx + ScaleUIPx(half_w + 12)), (float)(cy + ScaleUIPx(y + 20)), (float)ScaleUIPx(half_w), (float)ScaleUIPx(38)};
+        props.id = 512;
+        props.min = 1;
+        props.max = 999999;
+        props.step = 1;
+        props.value = &a->counter;
+        Spinbox(props);
+    }
+    y += 62;
+    label_text_px("Excluded characters", cx, cy + ScaleUIPx(y), 14, text);
+    {
+        Rectangle field = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(inner_w), (float)ScaleUIPx(38)};
+        draw_field(&a->exclude, field, 16, style);
+        keep_focused_field_visible(area, &a->exclude, field);
+    }
+    y += 78;
+    checkbox(cx, cy + ScaleUIPx(y), "Lowercase", &a->lower);
+    checkbox(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), "Uppercase", &a->upper);
+    y += 36;
+    checkbox(cx, cy + ScaleUIPx(y), "Digits", &a->digits);
+    checkbox(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), "Symbols", &a->symbols);
+    y += 62;
+
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Save Settings", UI_BUTTON_STYLE_PRIMARY, 0))
+        save_settings(a);
+    y += 64;
 
     label_text_px("MASTER PASSWORD", cx, cy + ScaleUIPx(y), 12, scheme.primary);
     y += 24;
-    checkbox(cx, cy + ScaleUIPx(y), "Require biometric unlock", &a->settings.use_biometric);
-    y += 42;
+    label_text_px("Master password", cx, cy + ScaleUIPx(y), 14, text);
+    a->master.secure = !a->reveal;
+    {
+        int fp = should_show_fingerprint_button();
+        int fp_disabled = !can_biometric_unlock_master();
+        int field_w = inner_w - (fp ? 130 : 80);
+        Rectangle field = (Rectangle){(float)cx, (float)(cy + ScaleUIPx(y + 22)), (float)ScaleUIPx(field_w), (float)ScaleUIPx(38)};
+
+        draw_field(&a->master, field, 16, style);
+        keep_focused_field_visible(area, &a->master, field);
+        if(fp)
+            fingerprint_button(a, cx + ScaleUIPx(field_w + 8), cy + ScaleUIPx(y + 22), ScaleUIPx(42), fp_disabled);
+        if(button(cx + ScaleUIPx(field_w + (fp ? 58 : 8)), cy + ScaleUIPx(y + 22), ScaleUIPx(72), ScaleUIPx(38),
+                  a->reveal ? "Hide" : "Reveal", UI_BUTTON_STYLE_SECONDARY, 0))
+            a->reveal = !a->reveal;
+    }
+    y += 82;
+    y += draw_master_fingerprint_symbols(a, cx, cy + ScaleUIPx(y));
+    if(a->settings.show_fingerprint && a->master.buffer[0] != '\0')
+        y += 12;
+    checkbox(cx, cy + ScaleUIPx(y), "Use fingerprint unlock", &a->settings.use_biometric);
+    y += 44;
+    checkbox(cx, cy + ScaleUIPx(y), "Show master fingerprint", &a->settings.show_fingerprint);
+    y += 48;
     if(!android_bridge_biometric_available())
         label_text_px(android_bridge_biometric_setup_required()
-                          ? "Set up Android screen lock and fingerprint first"
+                          ? "Android fingerprint setup required"
                           : "Biometric unlock is not available on this device",
                       cx, cy + ScaleUIPx(y), 12, scheme.on_surface_variant);
     else if(android_bridge_master_saved())
-        label_text_px(android_bridge_master_biometric() ? "Saved master uses biometric unlock" : "Saved master unlocks without biometric",
+        label_text_px(android_bridge_master_biometric() ? "Saved master uses fingerprint unlock" : "Saved master unlocks without fingerprint",
                       cx, cy + ScaleUIPx(y), 12, scheme.on_surface_variant);
     else
         label_text_px("No saved master password", cx, cy + ScaleUIPx(y), 12, scheme.on_surface_variant);
-    y += 32;
-    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Master", UI_BUTTON_STYLE_PRIMARY, 0)) {
+    y += 36;
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(inner_w), ScaleUIPx(42), "Save With Fingerprint", UI_BUTTON_STYLE_PRIMARY, !android_bridge_biometric_available())) {
+        android_bridge_set_soft_keyboard(0);
+        a->settings.use_biometric = 1;
         a->secure_action = 2;
-        android_bridge_save_master(a->master.buffer, a->settings.use_biometric);
+        android_bridge_save_master(a->master.buffer, 1);
     }
-    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Unlock Master", UI_BUTTON_STYLE_SECONDARY, !android_bridge_master_saved())) {
+    y += 50;
+    if(button(cx, cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Save Without", UI_BUTTON_STYLE_SECONDARY, 0)) {
+        a->settings.use_biometric = 0;
+        a->secure_action = 2;
+        android_bridge_save_master(a->master.buffer, 0);
+    }
+    if(button(cx + ScaleUIPx(half_w + 12), cy + ScaleUIPx(y), ScaleUIPx(half_w), ScaleUIPx(42), "Unlock", UI_BUTTON_STYLE_SECONDARY, !android_bridge_master_saved())) {
+        android_bridge_set_soft_keyboard(0);
         a->secure_action = 1;
         android_bridge_unlock_master();
     }
@@ -975,7 +1203,6 @@ draw_narrow(PassApp *a, int width, int height, int top_reserved, int bottom_rese
 {
     UIScrollArea area;
     UIScrollView view;
-    int margin = 0;
     int card_x = 0;
     int card_y = top_reserved + 8;
     int card_w = width;
@@ -992,13 +1219,13 @@ draw_narrow(PassApp *a, int width, int height, int top_reserved, int bottom_rese
         card_h = 200;
     switch(a->view) {
     case VIEW_PROFILES:
-        content_h = 190 + a->profile_count * 50 + pad;
+        content_h = 210 + a->profile_count * 50 + pad;
         break;
     case VIEW_SETTINGS:
-        content_h = 420 + pad;
+        content_h = 880 + pad;
         break;
     default:
-        content_h = 620 + pad;
+        content_h = 650 + pad;
         break;
     }
 
@@ -1012,17 +1239,17 @@ draw_narrow(PassApp *a, int width, int height, int top_reserved, int bottom_rese
     view = BeginUIScrollContainer(area);
     cx = view.content_x;
     cy = view.content_y;
-    y = 0;
+    y = 20;
 
     switch(a->view) {
     case VIEW_PROFILES:
-        draw_profiles_page(a, cx, cy, inner_w, y);
+        draw_profiles_page(a, area, cx, cy, inner_w, y);
         break;
     case VIEW_SETTINGS:
-        draw_settings_page(a, cx, cy, inner_w, y);
+        draw_settings_page(a, area, cx, cy, inner_w, y);
         break;
     default:
-        draw_generate_page(a, cx, cy, inner_w, y);
+        draw_generate_page(a, area, cx, cy, inner_w, y);
         break;
     }
     EndUIScrollContainer(area, view);

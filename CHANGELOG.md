@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.4] - 2026-08-22
+
+- Save and reuse Android master-password defaults, with fingerprint unlock
+  available from the generator and settings screens.
+- Keep Android form fields visible while the keyboard is open, with better
+  spacing around settings and excluded-character controls.
+- Run the real Pass app at pass.waozi.xyz/app through the Kryon canvas UI,
+  replacing the standalone browser form.
+- Publish Android releases as a universal APK plus per-ABI APKs.
+
 ## [0.2.3] - 2026-08-21
 
 - Verify every download: releases now ship a SHA256SUMS file covering the

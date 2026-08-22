@@ -1,6 +1,6 @@
 {
-  "name": "pass",
-  "short_name": "pass",
+  "name": "Pass",
+  "short_name": "Pass",
   "description": "Generate deterministic passwords locally.",
   "start_url": "/app/",
   "scope": "/app/",
